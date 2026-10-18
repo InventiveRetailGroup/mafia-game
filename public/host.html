@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Мафия — Панель ведущего</title>
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    --bg: #0f1f4a; --bg-2: #1e3a8a; --bg-3: #2563eb;
+    --card: #ffffff; --card-2: #dbeafe;
+    --ink: #0f1f4a; --ink-soft: #4b6cb7;
+    --accent: #2563eb; --accent-2: #3b82f6; --line: #bfdbfe;
+    --mafia-bg: #fecaca; --mafia-ink: #7f1d1d;
+    --special-bg: #bfdbfe; --special-ink: #1e3a8a;
+    --citizen-bg: #bbf7d0; --citizen-ink: #14532d;
+  }
+  html, body {
+    margin: 0; padding: 0; min-height: 100vh;
+    font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: #ffffff;
+  }
+  body { padding: 24px; }
+  h1 { font-size: 22px; margin: 0 0 20px; letter-spacing: 1px; }
+  .layout {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+    max-width: 1200px; margin: 0 auto;
+  }
+  .card {
+    background: var(--card); color: var(--ink);
+    border-radius: 14px; padding: 22px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+    border: 1px solid var(--line);
+  }
+  button {
+    font-family: inherit; background: var(--accent); color: #fff;
+    border: none; padding: 12px 22px; font-size: 15px;
+    border-radius: 10px; cursor: pointer; transition: 0.15s;
+    letter-spacing: 0.5px;
+  }
+  button:hover:not(:disabled) { background: var(--accent-2); }
+  button:disabled { background: #94a3b8; cursor: not-allowed; }
+  button.start { background: #16a34a; }
+  button.start:hover:not(:disabled) { background: #22c55e; }
+  button.kick { background: #dc2626; padding: 4px 10px; font-size: 13px; }
+  button.finish { background: #1e3a8a; }
+  button.finish:hover:not(:disabled) { background: #1d4ed8; }
+  button.hint { background: #f59e0b; }
+  button.hint:hover:not(:disabled) { background: #fbbf24; }
+  #qrBox {
+    display: flex; justify-content: center; align-items: center;
+    min-height: 260px; background: #fff; border-radius: 10px;
+    margin-top: 14px; padding: 12px;
+  }
+  .roomCode {
+    font-size: 46px; font-weight: 700; letter-spacing: 8px;
+    text-align: center; margin: 8px 0; color: var(--accent);
+    font-family: 'Courier New', monospace;
+  }
+  .joinUrl {
+    text-align: center; font-size: 13px; color: var(--ink-soft);
+    word-break: break-all; margin-bottom: 8px;
+  }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li.player {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 12px; background: var(--card-2);
+    border-radius: 10px; margin-bottom: 8px; font-size: 15px;
+    border-left: 4px solid transparent; gap: 8px;
+    color: var(--ink);
+  }
+  li.player.role-mafia   { border-left-color: #7f1d1d; background: var(--mafia-bg); color: var(--mafia-ink); }
+  li.player.role-don     { border-left-color: #7f1d1d; background: var(--mafia-bg); color: var(--mafia-ink); }
+  li.player.role-sheriff { border-left-color: #1e3a8a; background: var(--special-bg); color: var(--special-ink); }
+  li.player.role-doctor  { border-left-color: #1e3a8a; background: var(--special-bg); color: var(--special-ink); }
+  li.player.role-maniac  { border-left-color: #1e3a8a; background: var(--special-bg); color: var(--special-ink); }
+  li.player.role-beauty  { border-left-color: #1e3a8a; background: var(--special-bg); color: var(--special-ink); }
+  li.player.role-journalist { border-left-color: #1e3a8a; background: var(--special-bg); color: var(--special-ink); }
+  li.player.role-citizen { border-left-color: #14532d; background: var(--citizen-bg); color: var(--citizen-ink); }
+  .dot {
+    display: inline-block; width: 8px; height: 8px;
+    border-radius: 50%; margin-right: 8px; background: #dc2626;
+  }
+  .dot.on { background: #16a34a; }
+  .muted { color: var(--ink-soft); font-size: 14px; }
+  #status { margin-top: 12px; font-size: 14px; color: #dbeafe; }
+  .section-title {
+    font-size: 13px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--ink-soft); margin: 16px 0 8px;
+  }
+  .left-name { display: flex; align-items: center; }
+
+  /* Модалка для подсказки */
+  #hintModal, #hintTotalModal {
+    position: fixed; inset: 0;
+    background: rgba(15, 31, 74, 0.85);
+    display: none; align-items: center; justify-content: center;
+    padding: 20px; z-index: 200; overflow-y: auto;
+  }
+  #hintModal.open, #hintTotalModal.open { display: flex; }
+  .hint-card {
+    background: var(--card); border-radius: 18px;
+    width: 100%; max-width: 500px; overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+    border: 2px solid var(--accent);
+    color: var(--ink);
+    padding: 24px;
+  }
+  .hint-card h2 { margin-top: 0; color: var(--ink); }
+  .hint-card input {
+    width: 100%; padding: 12px 14px; font-size: 16px;
+    border: 1px solid var(--line); border-radius: 10px;
+    margin: 12px 0; outline: none;
+  }
+  .hint-card ul { margin: 12px 0; max-height: 320px; overflow-y: auto; }
+  .hint-card ul li {
+    padding: 10px 12px; margin-bottom: 6px;
+    background: var(--card-2); border-radius: 10px;
+    cursor: pointer; color: var(--ink);
+    border-left: 4px solid transparent;
+  }
+  .hint-card ul li:hover { border-left-color: var(--accent); }
+  .hint-card ul li.dead { opacity: 0.4; cursor: default; text-decoration: line-through; }
+  .hint-actions { display: flex; gap: 8px; margin-top: 12px; }
+  .hint-actions button { flex: 1; }
+  .hint-actions button.cancel { background: #64748b; }
+</style>
+</head>
+<body>
+  <h1>Мафия — панель ведущего</h1>
+
+  <div id="setup">
+    <button id="createBtn">Создать комнату</button>
+    <div id="status"></div>
+  </div>
+
+  <div id="gameArea" class="layout" style="display:none; margin-top: 20px;">
+    <div class="card">
+      <h2 style="margin-top:0; font-size:18px;">Подключение игроков</h2>
+      <div class="roomCode" id="roomCode">----</div>
+      <div class="joinUrl" id="joinUrl"></div>
+      <div id="qrBox"></div>
+      <p class="muted" style="text-align:center; margin-top:12px;">
+        Игроки сканируют QR или переходят по ссылке
+      </p>
+      <div style="text-align:center; margin-top:16px;">
+        <button id="startBtn" class="start" disabled>Начать игру</button>
+      </div>
+      <div id="startHint" class="muted" style="text-align:center; margin-top:8px;">Минимум 4 игрока</div>
+
+      <div id="nightControls" style="display:none; text-align:center; margin-top:16px;">
+        <button id="nightBtn" class="start">Начать ночь</button>
+        <button id="finishDayBtn" class="finish" style="display:none; margin-left:8px;">Завершить день</button>
+        <button id="hintBtn" class="hint" style="display:none; margin-left:8px;">Дать подсказку</button>
+      </div>
+      <div id="hintsInfo" class="muted" style="text-align:center; margin-top:8px; display:none;"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0; font-size:18px;">
+        Игроки (<span id="playerCount">0</span>)
+      </h2>
+
+      <div id="lobbyList">
+        <ul id="playerList"></ul>
+        <p class="muted" id="emptyHint">Пока никто не подключился…</p>
+      </div>
+
+      <div id="gameList" style="display:none;">
+        <div class="section-title">Мафия</div>
+        <ul id="mafiaList"></ul>
+        <div class="section-title">Особые роли</div>
+        <ul id="specialList"></ul>
+        <div class="section-title">Мирные жители</div>
+        <ul id="citizenList"></ul>
+      </div>
+
+      <div id="dayLog" style="display:none; margin-top:20px;">
+        <div class="section-title">День — голосование</div>
+        <ul id="dayVotesList"></ul>
+        <div id="revoteBox" style="display:none; margin-top:12px;">
+          <div class="section-title">Переголосование</div>
+          <ul id="revoteList"></ul>
+        </div>
+        <div id="immunityBox" style="display:none; margin-top:12px;">
+          <div class="section-title">Защищены Красавчиком</div>
+          <ul id="immunityList"></ul>
+        </div>
+        <div id="hintLogBox" style="display:none; margin-top:12px;">
+          <div class="section-title">Выданные подсказки</div>
+          <ul id="hintLogList"></ul>
+        </div>
+      </div>
+
+      <div id="nightLog" style="display:none; margin-top:20px;">
+        <div class="section-title">Ход ночи</div>
+        <div id="nightSteps" class="muted" style="margin-bottom:12px;"></div>
+        <div class="section-title">Действия игроков</div>
+        <ul id="nightActions"></ul>
+      </div>
+
+      <div id="nightResultsBox" style="display:none; margin-top:20px;">
+        <div class="section-title">Итоги ночи</div>
+        <ul id="nightResults"></ul>
+      </div>
+
+      <div id="dayResultsBox" style="display:none; margin-top:20px;">
+        <div class="section-title">Итоги дня</div>
+        <ul id="dayResults"></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модалка: ввод числа подсказок -->
+  <div id="hintTotalModal">
+    <div class="hint-card">
+      <h2>Сколько всего подсказок в игре?</h2>
+      <p class="muted" style="color: var(--ink-soft);">
+        От этого зависит шкала процентов. Например, если всего 3 подсказки — первая будет «слабой», последняя — «сильной».
+      </p>
+      <input type="number" id="hintTotalInput" min="1" max="20" value="3" />
+      <div class="hint-actions">
+        <button class="cancel" id="hintTotalCancel">Отмена</button>
+        <button id="hintTotalConfirm">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модалка: выбор игрока для подсказки -->
+  <div id="hintModal">
+    <div class="hint-card">
+      <h2>Кому дать подсказку?</h2>
+      <p class="muted" style="color: var(--ink-soft);" id="hintCounter"></p>
+      <ul id="hintPlayers"></ul>
+      <div class="hint-actions">
+        <button class="cancel" id="hintCancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const socket = io();
+  const createBtn = document.getElementById('createBtn');
+  const statusEl = document.getElementById('status');
+  const setupEl = document.getElementById('setup');
+  const gameArea = document.getElementById('gameArea');
+  const roomCodeEl = document.getElementById('roomCode');
+  const joinUrlEl = document.getElementById('joinUrl');
+  const qrBox = document.getElementById('qrBox');
+  const playerList = document.getElementById('playerList');
+  const playerCount = document.getElementById('playerCount');
+  const emptyHint = document.getElementById('emptyHint');
+  const startBtn = document.getElementById('startBtn');
+  const startHint = document.getElementById('startHint');
+  const lobbyList = document.getElementById('lobbyList');
+  const gameList = document.getElementById('gameList');
+  const mafiaList = document.getElementById('mafiaList');
+  const specialList = document.getElementById('specialList');
+  const citizenList = document.getElementById('citizenList');
+  const nightControls = document.getElementById('nightControls');
+  const nightBtn = document.getElementById('nightBtn');
+  const finishDayBtn = document.getElementById('finishDayBtn');
+  const hintBtn = document.getElementById('hintBtn');
+  const hintsInfo = document.getElementById('hintsInfo');
+  const nightLog = document.getElementById('nightLog');
+  const nightSteps = document.getElementById('nightSteps');
+  const nightActions = document.getElementById('nightActions');
+  const nightResultsBox = document.getElementById('nightResultsBox');
+  const nightResults = document.getElementById('nightResults');
+  const dayLog = document.getElementById('dayLog');
+  const dayVotesList = document.getElementById('dayVotesList');
+  const dayResultsBox = document.getElementById('dayResultsBox');
+  const dayResults = document.getElementById('dayResults');
+  const immunityBox = document.getElementById('immunityBox');
+  const immunityList = document.getElementById('immunityList');
+  const revoteBox = document.getElementById('revoteBox');
+  const revoteList = document.getElementById('revoteList');
+  const hintLogBox = document.getElementById('hintLogBox');
+  const hintLogList = document.getElementById('hintLogList');
+
+  const hintModal = document.getElementById('hintModal');
+  const hintPlayers = document.getElementById('hintPlayers');
+  const hintCounter = document.getElementById('hintCounter');
+  const hintCancel = document.getElementById('hintCancel');
+  const hintTotalModal = document.getElementById('hintTotalModal');
+  const hintTotalInput = document.getElementById('hintTotalInput');
+  const hintTotalCancel = document.getElementById('hintTotalCancel');
+  const hintTotalConfirm = document.getElementById('hintTotalConfirm');
+
+  let roomId = null;
+  let hostToken = null;
+  let currentHintsTotal = 0;
+  let currentHintsUsed = 0;
+  let alivePlayers = [];
+
+  socket.on('connect', () => {
+    const saved = localStorage.getItem('mafia_host');
+    if (saved && !roomId) {
+      try {
+        const { roomId: rid, hostToken: ht } = JSON.parse(saved);
+        socket.emit('reconnectHost', { roomId: rid, hostToken: ht }, (res) => {
+          if (res.ok) { roomId = rid; hostToken = ht; showRoom(rid); }
+          else localStorage.removeItem('mafia_host');
+        });
+      } catch (e) {}
+    }
+  });
+
+  createBtn.addEventListener('click', () => {
+    createBtn.disabled = true;
+    statusEl.textContent = 'Создаём комнату…';
+    socket.emit('createRoom', (res) => {
+      if (!res.ok) {
+        statusEl.textContent = 'Ошибка: ' + (res.error || 'неизвестно');
+        createBtn.disabled = false;
+        return;
+      }
+      roomId = res.roomId;
+      hostToken = res.hostToken;
+      localStorage.setItem('mafia_host', JSON.stringify({ roomId, hostToken }));
+      showRoom(roomId);
+    });
+  });
+
+  startBtn.addEventListener('click', () => {
+    startBtn.disabled = true;
+    socket.emit('startGame', { roomId }, (res) => {
+      if (!res?.ok) {
+        alert('Ошибка: ' + (res?.error || 'неизвестно'));
+        startBtn.disabled = false;
+      }
+    });
+  });
+
+  nightBtn.addEventListener('click', () => {
+    socket.emit('startNight', { roomId }, (res) => {
+      if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
+    });
+  });
+
+  finishDayBtn.addEventListener('click', () => {
+    socket.emit('finishDay', { roomId }, (res) => {
+      if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
+    });
+  });
+
+  // ---- Подсказки ----
+  hintBtn.addEventListener('click', () => {
+    if (currentHintsTotal === 0) {
+      // Сначала спрашиваем общее число
+      hintTotalModal.classList.add('open');
+      hintTotalInput.value = 3;
+    } else {
+      openHintPicker();
+    }
+  });
+
+  hintTotalCancel.addEventListener('click', () => hintTotalModal.classList.remove('open'));
+  hintTotalConfirm.addEventListener('click', () => {
+    const total = parseInt(hintTotalInput.value, 10);
+    if (!total || total < 1 || total > 20) {
+      alert('Введите число от 1 до 20');
+      return;
+    }
+    socket.emit('setHintsTotal', { roomId, total }, (res) => {
+      if (!res?.ok) { alert('Ошибка: ' + (res?.error || 'неизвестно')); return; }
+      currentHintsTotal = total;
+      currentHintsUsed = 0;
+      hintsInfo.style.display = 'block';
+      hintsInfo.textContent = `Подсказок: 0 / ${total}`;
+      hintTotalModal.classList.remove('open');
+      openHintPicker();
+    });
+  });
+
+  function openHintPicker() {
+    if (currentHintsUsed >= currentHintsTotal) {
+      alert('Подсказки закончились');
+      return;
+    }
+    hintCounter.textContent = `Подсказка ${currentHintsUsed + 1} из ${currentHintsTotal}`;
+    hintPlayers.innerHTML = '';
+    if (!alivePlayers.length) {
+      hintPlayers.innerHTML = '<li class="muted">Нет живых игроков</li>';
+    } else {
+      alivePlayers.forEach(p => {
+        const li = document.createElement('li');
+        li.textContent = p.name;
+        li.onclick = () => {
+          socket.emit('giveHint', { roomId, playerId: p.id }, (res) => {
+            if (!res?.ok) { alert('Ошибка: ' + (res?.error || 'неизвестно')); return; }
+            currentHintsUsed = res.current;
+            hintsInfo.textContent = `Подсказок: ${currentHintsUsed} / ${currentHintsTotal}`;
+            hintModal.classList.remove('open');
+          });
+        };
+        hintPlayers.appendChild(li);
+      });
+    }
+    hintModal.classList.add('open');
+  }
+
+  hintCancel.addEventListener('click', () => hintModal.classList.remove('open'));
+
+  socket.on('hintsTotalSet', ({ total }) => {
+    currentHintsTotal = total;
+    currentHintsUsed = 0;
+    hintsInfo.style.display = 'block';
+    hintsInfo.textContent = `Подсказок: 0 / ${total}`;
+  });
+
+  socket.on('hintGiven', ({ playerName, current, total }) => {
+    currentHintsUsed = current;
+    currentHintsTotal = total;
+    hintsInfo.style.display = 'block';
+    hintsInfo.textContent = `Подсказок: ${current} / ${total}`;
+    hintLogBox.style.display = 'block';
+    const li = document.createElement('li');
+    li.className = 'player';
+    li.textContent = `Подсказка ${current}/${total} выдана игроку ${playerName}`;
+    hintLogList.appendChild(li);
+  });
+
+  function showRoom(id) {
+    setupEl.style.display = 'none';
+    gameArea.style.display = 'grid';
+    roomCodeEl.textContent = id;
+    const url = `${location.origin}/player.html?room=${id}`;
+    joinUrlEl.textContent = url;
+    qrBox.innerHTML = '';
+    const canvas = document.createElement('canvas');
+    qrBox.appendChild(canvas);
+    QRCode.toCanvas(canvas, url, { width: 240, margin: 1 }, (err) => {
+      if (err) console.error(err);
+    });
+  }
+
+  socket.on('lobbyState', (state) => {
+    if (!roomId || state.roomId !== roomId) return;
+    playerCount.textContent = state.players.length;
+    emptyHint.style.display = state.players.length ? 'none' : 'block';
+    playerList.innerHTML = '';
+
+    state.players.forEach(p => {
+      const li = document.createElement('li');
+      li.className = 'player';
+
+      const left = document.createElement('span');
+      left.className = 'left-name';
+      left.innerHTML = `<span class="dot ${p.connected ? 'on' : ''}"></span>${escapeHtml(p.name)}`;
+
+      const right = document.createElement('span');
+      right.style.display = 'flex';
+      right.style.gap = '8px';
+
+      const select = document.createElement('select');
+      Object.assign(select.style, {
+        fontFamily: 'inherit', padding: '4px 8px', borderRadius: '6px',
+        border: '1px solid #bfdbfe', background: '#fff',
+        color: '#0f1f4a', fontSize: '13px'
+      });
+
+      const options = [
+        { value: '', label: 'Авто' },
+        { value: 'mafia', label: 'Мафия' },
+        { value: 'don', label: 'Дон' },
+        { value: 'sheriff', label: 'Следователь' },
+        { value: 'doctor', label: 'Доктор' },
+        { value: 'maniac', label: 'Маньяк' },
+        { value: 'beauty', label: 'Красавчик' },
+        { value: 'journalist', label: 'Журналист' },
+        { value: 'citizen', label: 'Мирный' }
+      ];
+      options.forEach(o => {
+        const opt = document.createElement('option');
+        opt.value = o.value;
+        opt.textContent = o.label;
+        if ((p.role || '') === o.value) opt.selected = true;
+        select.appendChild(opt);
+      });
+      select.onchange = () => {
+        socket.emit('setPlayerRole', {
+          roomId, playerId: p.id, role: select.value || null
+        });
+      };
+
+      const kick = document.createElement('button');
+      kick.className = 'kick';
+      kick.textContent = 'Кикнуть';
+      kick.onclick = () => socket.emit('kickPlayer', { roomId, playerId: p.id });
+
+      right.appendChild(select);
+      right.appendChild(kick);
+      li.appendChild(left);
+      li.appendChild(right);
+      playerList.appendChild(li);
+    });
+
+    if (state.phase === 'lobby') {
+      startBtn.disabled = state.players.length < 4;
+      startHint.textContent = state.players.length < 4
+        ? `Нужно минимум 4 игрока (сейчас ${state.players.length})`
+        : 'Готово к старту';
+    }
+  });
+
+  socket.on('gameState', (state) => {
+    if (!roomId || state.roomId !== roomId) return;
+    lobbyList.style.display = 'none';
+    gameList.style.display = 'block';
+    startBtn.disabled = true;
+    startHint.textContent = 'Игра началась';
+
+    const mafia = [], special = [], citizens = [];
+    state.players.forEach(p => {
+      if (p.role === 'mafia' || p.role === 'don') mafia.push(p);
+      else if (p.role === 'citizen') citizens.push(p);
+      else special.push(p);
+    });
+
+    renderGroup(mafiaList, mafia);
+    renderGroup(specialList, special);
+    renderGroup(citizenList, citizens);
+  });
+
+  socket.on('phaseChanged', ({ phase }) => {
+    if (phase === 'roles') {
+      nightControls.style.display = 'block';
+      nightBtn.disabled = false;
+      nightBtn.textContent = 'Начать ночь';
+      nightBtn.style.display = 'inline-block';
+      finishDayBtn.style.display = 'none';
+      hintBtn.style.display = 'none';
+      hintsInfo.style.display = 'none';
+      dayLog.style.display = 'none';
+    }
+    if (phase === 'night') {
+      nightControls.style.display = 'block';
+      nightBtn.disabled = true;
+      nightBtn.textContent = 'Ночь идёт…';
+      nightBtn.style.display = 'inline-block';
+      finishDayBtn.style.display = 'none';
+      hintBtn.style.display = 'none';
+      dayLog.style.display = 'none';
+    }
+    if (phase === 'day') {
+      nightControls.style.display = 'block';
+      nightBtn.style.display = 'none';
+      finishDayBtn.style.display = 'inline-block';
+      finishDayBtn.disabled = false;
+      hintBtn.style.display = 'inline-block';
+    }
+  });
+
+  socket.on('hostNightState', (state) => {
+    nightLog.style.display = 'block';
+    nightSteps.textContent = `Шаг ${state.stepIndex + 1}/${state.totalSteps}: ${state.stepLabel || '—'}`;
+    nightActions.innerHTML = '';
+
+    const roleLabelRu = {
+      mafia: 'Мафия', don: 'Дон', sheriff: 'Следователь', doctor: 'Доктор',
+      maniac: 'Маньяк', beauty: 'Красавчик', journalist: 'Журналист'
+    };
+
+    Object.entries(state.actions).forEach(([role, map]) => {
+      if (role === 'mafia_don') {
+        Object.entries(map).forEach(([actorId, act]) => {
+          const actor = state.players.find(p => p.id === actorId);
+          const target = state.players.find(p => p.id === act.targetId);
+          if (!actor) return;
+          const li = document.createElement('li');
+          li.className = 'player';
+          li.style.borderLeftColor = '#7f1d1d';
+          li.textContent = `${act.mode === 'invite' ? 'Приглашение' : 'Убийство'}: ${actor.name} → ${target ? target.name : '?'}`;
+          nightActions.appendChild(li);
+        });
+        return;
+      }
+      Object.entries(map).forEach(([actorId, targetVal]) => {
+        const actor = state.players.find(p => p.id === actorId);
+        if (!actor) return;
+        const targets = Array.isArray(targetVal) ? targetVal : [targetVal];
+        const names = targets.map(tid => {
+          const t = state.players.find(p => p.id === tid);
+          return t ? t.name : '?';
+        }).join(' и ');
+        const li = document.createElement('li');
+        li.className = 'player';
+        li.style.borderLeftColor = '#1e3a8a';
+        li.textContent = `${roleLabelRu[role] || role}: ${actor.name} → ${names}`;
+        nightActions.appendChild(li);
+      });
+    });
+
+    if (!nightActions.children.length) {
+      const li = document.createElement('li');
+      li.className = 'muted';
+      li.textContent = 'Пока никто не выбрал';
+      nightActions.appendChild(li);
+    }
+  });
+
+  socket.on('hostNightResults', (res) => {
+    nightResultsBox.style.display = 'block';
+    nightResults.innerHTML = '';
+    res.journal.forEach(line => {
+      const li = document.createElement('li');
+      li.className = 'player';
+      li.textContent = line;
+      nightResults.appendChild(li);
+    });
+    if (res.deaths.length) {
+      const li = document.createElement('li');
+      li.className = 'player role-mafia';
+      li.innerHTML = `<b>Погибли:</b> ${res.deaths.map(d => d.name).join(', ')}`;
+      nightResults.appendChild(li);
+    } else {
+      const li = document.createElement('li');
+      li.className = 'player role-citizen';
+      li.textContent = 'Никто не погиб';
+      nightResults.appendChild(li);
+    }
+  });
+
+  socket.on('inviteResult', ({ name, accepted }) => {
+    const li = document.createElement('li');
+    li.className = 'player';
+    li.style.borderLeftColor = accepted ? '#7f1d1d' : '#14532d';
+    li.textContent = `${name} ${accepted ? 'принял приглашение и стал мафией' : 'отклонил приглашение'}`;
+    dayVotesList.appendChild(li);
+  });
+
+  socket.on('hostDayState', (state) => {
+    dayLog.style.display = 'block';
+    dayVotesList.innerHTML = '';
+    alivePlayers = state.players.filter(p => p.alive);
+
+    const votes = state.votes || {};
+    if (Object.keys(votes).length === 0) {
+      const li = document.createElement('li');
+      li.className = 'muted';
+      li.textContent = 'Пока никто не голосовал';
+      dayVotesList.appendChild(li);
+    } else {
+      Object.entries(votes).forEach(([voterId, targetId]) => {
+        const voter = state.players.find(p => p.id === voterId);
+        const target = state.players.find(p => p.id === targetId);
+        if (!voter || !target) return;
+        const li = document.createElement('li');
+        li.className = 'player';
+        li.textContent = `${voter.name} → ${target.name}`;
+        dayVotesList.appendChild(li);
+      });
+    }
+
+    const counts = {};
+    Object.values(votes).forEach(tid => { counts[tid] = (counts[tid] || 0) + 1; });
+    if (Object.keys(counts).length) {
+      const li = document.createElement('li');
+      li.className = 'player';
+      const summary = Object.entries(counts).map(([tid, c]) => {
+        const t = state.players.find(p => p.id === tid);
+        return `${t ? t.name : '?'}: ${c}`;
+      }).join(' · ');
+      li.innerHTML = `<b>Итог:</b> ${summary}`;
+      dayVotesList.appendChild(li);
+    }
+
+    if (state.revoteCandidates && state.revoteCandidates.length) {
+      revoteBox.style.display = 'block';
+      revoteList.innerHTML = '';
+      state.revoteCandidates.forEach(tid => {
+        const t = state.players.find(p => p.id === tid);
+        if (!t) return;
+        const li = document.createElement('li');
+        li.className = 'player role-sheriff';
+        li.textContent = `Кандидат: ${t.name}`;
+        revoteList.appendChild(li);
+      });
+    } else {
+      revoteBox.style.display = 'none';
+    }
+
+    const immun = state.immunity || [];
+    if (immun.length) {
+      immunityBox.style.display = 'block';
+      immunityList.innerHTML = '';
+      immun.forEach(tid => {
+        const t = state.players.find(p => p.id === tid);
+        if (!t) return;
+        const li = document.createElement('li');
+        li.className = 'player role-sheriff';
+        li.textContent = `${t.name} защищён от казни`;
+        immunityList.appendChild(li);
+      });
+    } else {
+      immunityBox.style.display = 'none';
+    }
+
+    if (state.hintsTotal) {
+      currentHintsTotal = state.hintsTotal;
+      currentHintsUsed = state.hintsUsed || 0;
+      hintsInfo.style.display = 'block';
+      hintsInfo.textContent = `Подсказок: ${currentHintsUsed} / ${currentHintsTotal}`;
+    }
+  });
+
+  socket.on('revoteStarted', ({ candidates }) => {
+    alert('Ничья! Переголосование между: ' + candidates.map(c => c.name).join(', '));
+  });
+
+  socket.on('dayResults', (res) => {
+    dayResultsBox.style.display = 'block';
+    dayResults.innerHTML = '';
+    const li = document.createElement('li');
+    if (res.lynched) {
+      li.className = 'player role-mafia';
+      li.textContent = `Казнён: ${res.lynched.name}`;
+    } else if (res.tie) {
+      li.className = 'player';
+      li.textContent = 'Ничья — никто не казнён';
+    } else {
+      li.className = 'player role-citizen';
+      li.textContent = 'Голосов не было — никто не казнён';
+    }
+    dayResults.appendChild(li);
+  });
+
+  socket.on('gameOver', ({ winner }) => {
+    alert(winner === 'mafia' ? 'Игра окончена: победила МАФИЯ!' : 'Игра окончена: победили МИРНЫЕ!');
+  });
+
+  function renderGroup(ul, players) {
+    ul.innerHTML = '';
+    if (!players.length) {
+      const li = document.createElement('li');
+      li.className = 'muted';
+      li.style.padding = '6px 4px';
+      li.textContent = '—';
+      ul.appendChild(li);
+      return;
+    }
+    players.forEach(p => {
+      const li = document.createElement('li');
+      li.className = 'player role-' + p.role;
+      const left = document.createElement('span');
+      left.innerHTML = `<span class="dot ${p.connected ? 'on' : ''}"></span>${escapeHtml(p.name)}`;
+      const role = document.createElement('span');
+      role.style.fontSize = '13px';
+      role.style.fontWeight = '700';
+      role.textContent = roleLabel(p.role);
+      li.appendChild(left);
+      li.appendChild(role);
+      ul.appendChild(li);
+    });
+  }
+
+  function roleLabel(role) {
+    return ({
+      mafia: 'МАФИЯ', don: 'ДОН', citizen: 'МИРНЫЙ',
+      sheriff: 'СЛЕДОВАТЕЛЬ', doctor: 'ДОКТОР',
+      maniac: 'МАНЬЯК', beauty: 'КРАСАВЧИК', journalist: 'ЖУРНАЛИСТ'
+    })[role] || role;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+  }
+</script>
+</body>
+</html>

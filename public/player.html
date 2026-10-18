@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Мафия</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  :root {
+    --bg: #0f1f4a;
+    --bg-2: #1e3a8a;
+    --bg-3: #2563eb;
+    --card: #ffffff;
+    --card-2: #dbeafe;
+    --ink: #0f1f4a;
+    --ink-soft: #4b6cb7;
+    --accent: #2563eb;
+    --accent-2: #3b82f6;
+    --line: #bfdbfe;
+  }
+  html, body {
+    margin: 0; padding: 0; min-height: 100vh;
+    font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--ink);
+  }
+  body {
+    padding: 20px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    min-height: 100vh;
+  }
+  .card {
+    background: var(--card); border-radius: 16px;
+    padding: 26px; width: 100%; max-width: 420px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+    border: 1px solid var(--line);
+  }
+  h1 { font-size: 24px; margin: 0 0 8px; text-align: center; letter-spacing: 1px; color: var(--ink); }
+  .sub { text-align: center; color: var(--ink-soft); font-size: 14px; margin-bottom: 22px; }
+  label { display: block; font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 0.5px; }
+  input {
+    width: 100%; padding: 14px 16px; font-size: 16px;
+    background: #fff; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 10px;
+    margin-bottom: 16px; outline: none; font-family: inherit;
+    transition: border-color 0.15s;
+  }
+  input:focus { border-color: var(--accent); }
+  input.code {
+    text-transform: uppercase; letter-spacing: 4px;
+    text-align: center; font-weight: 700; font-size: 20px;
+    font-family: 'Courier New', monospace;
+  }
+  button {
+    width: 100%; background: var(--accent); color: #fff;
+    border: none; padding: 16px; font-size: 16px; font-weight: 600;
+    border-radius: 10px; cursor: pointer; transition: 0.15s;
+    font-family: inherit; letter-spacing: 1px;
+  }
+  button:hover:not(:disabled) { background: var(--accent-2); }
+  button:disabled { background: #94a3b8; cursor: not-allowed; }
+  .error { color: #b91c1c; font-size: 14px; text-align: center; margin-top: 12px; min-height: 20px; }
+  .status { text-align: center; font-size: 15px; color: var(--ink-soft); }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--line); border-top-color: var(--accent);
+    border-radius: 50%; margin: 20px auto;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #roleBtn {
+    position: fixed; top: 16px; right: 16px;
+    width: 52px; height: 52px; border-radius: 12px;
+    background: var(--card); border: 2px solid var(--accent);
+    color: var(--accent); font-size: 24px; padding: 0;
+    display: none; align-items: center; justify-content: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+    z-index: 50; cursor: pointer;
+    font-weight: 700;
+  }
+  #roleBtn::after { content: 'Р'; font-size: 24px; color: var(--accent); }
+
+  #roleModal, #resultModal, #peekModal, #inviteModal, #hintResultModal {
+    position: fixed; inset: 0;
+    background: rgba(15, 31, 74, 0.85);
+    display: none; align-items: center; justify-content: center;
+    padding: 20px; z-index: 100; overflow-y: auto;
+  }
+  #roleModal.open, #resultModal.open, #peekModal.open, #inviteModal.open, #hintResultModal.open { display: flex; }
+  .role-card {
+    background: var(--card); border-radius: 18px;
+    width: 100%; max-width: 420px; overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+    border: 2px solid var(--accent);
+    animation: pop 0.2s ease-out;
+  }
+  @keyframes pop {
+    from { transform: scale(0.94); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+  .role-top {
+    padding: 18px 20px; background: var(--bg-2);
+    color: #ffffff; text-align: center;
+  }
+  .role-label { font-size: 12px; letter-spacing: 3px; opacity: 0.85; }
+  .role-title {
+    font-size: 28px; font-weight: 800; margin-top: 4px; letter-spacing: 2px;
+  }
+  .role-title.mafia, .role-title.don, .role-title.maniac { color: #fca5a5; }
+  .role-title.sheriff, .role-title.journalist { color: #bfdbfe; }
+  .role-title.doctor { color: #bbf7d0; }
+  .role-title.citizen { color: #fef3c7; }
+  .role-title.beauty { color: #fbcfe8; }
+  .role-title.unknown { color: #e0e7ff; }
+
+  .role-portrait {
+    height: 320px;
+    background: linear-gradient(180deg, #dbeafe, #bfdbfe);
+    display: flex; align-items: center; justify-content: center;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    overflow: hidden;
+  }
+  .role-portrait img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .role-portrait .placeholder {
+    font-size: 20px; color: var(--ink-soft);
+    text-align: center; padding: 20px;
+  }
+  .role-desc {
+    padding: 18px 22px 22px; color: var(--ink);
+    font-size: 15px; line-height: 1.55; text-align: center;
+  }
+  .role-desc b { color: var(--accent); }
+
+  .modal-close {
+    margin: 0 20px 20px; background: var(--bg-2);
+    width: calc(100% - 40px);
+  }
+  .modal-close:hover { background: var(--bg-3); }
+
+  #topBar {
+    position: fixed; top: 0; left: 0; right: 0;
+    padding: 12px 16px; background: var(--bg-2);
+    color: #ffffff; border-bottom: 1px solid var(--line);
+    display: none; justify-content: space-between; align-items: center;
+    font-size: 14px; z-index: 40;
+  }
+  .badge {
+    display: inline-block; padding: 4px 10px;
+    background: #bbf7d0; color: #14532d;
+    border-radius: 12px; font-size: 12px; font-weight: 700;
+  }
+  .badge.off { background: #fecaca; color: #7f1d1d; }
+  #content {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    width: 100%; padding-top: 60px;
+  }
+
+  #nightScreen, #dayScreen {
+    display: none; width: 100%; max-width: 460px; padding-top: 60px;
+  }
+  #nightTimer {
+    text-align: center; font-size: 34px; font-weight: 800;
+    color: var(--accent); margin: 8px 0 16px;
+    font-family: 'Courier New', monospace;
+  }
+  ul.targets { list-style: none; padding: 0; margin: 0; }
+  ul.targets li.target {
+    padding: 12px 14px; margin-bottom: 8px;
+    background: var(--card-2); border: 2px solid var(--line);
+    border-radius: 10px; cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center;
+    transition: 0.12s; gap: 8px;
+    color: var(--ink);
+  }
+  ul.targets li.target:hover { background: #eff6ff; border-color: var(--accent); }
+  ul.targets li.target.selected { background: #93c5fd; border-color: var(--accent); }
+  ul.targets li.target.dead { opacity: 0.45; text-decoration: line-through; cursor: default; }
+  ul.targets li.target.immune { border-color: #fbcfe8; background: #fce7f3; }
+  .vote-dots {
+    display: inline-flex; gap: 3px; margin-left: 8px;
+  }
+  .vote-dots .d {
+    width: 10px; height: 10px; border-radius: 50%; background: #dc2626;
+  }
+  .vote-dots .d.invite { background: #16a34a; }
+  .tie-info {
+    text-align: center; color: var(--ink-soft);
+    font-size: 13px; margin-top: 8px;
+  }
+  .mode-switch {
+    display: flex; gap: 8px; margin-bottom: 12px;
+  }
+  .mode-switch button {
+    flex: 1; padding: 10px; font-size: 14px;
+    background: var(--bg-2);
+  }
+  .mode-switch button.active { background: var(--accent); }
+  .recruits-left {
+    text-align: center; color: var(--ink-soft);
+    font-size: 13px; margin-bottom: 8px;
+  }
+  .invite-actions {
+    display: flex; gap: 8px; padding: 0 20px 20px;
+  }
+  .invite-actions button { padding: 14px; }
+  .invite-actions button.accept { background: #16a34a; }
+  .invite-actions button.reject { background: #dc2626; }
+  .blocked-note {
+    background: #fce7f3;
+    border: 1px solid #fbcfe8;
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+    color: #831843;
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+  .feedback-note {
+    background: #fef3c7;
+    border: 1px solid #fde68a;
+    border-radius: 10px;
+    padding: 12px;
+    text-align: center;
+    color: #78350f;
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+  /* Подсказка */
+  .hint-list { padding: 0 20px; }
+  .hint-list li {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 14px; margin-bottom: 8px;
+    background: var(--card-2); border-radius: 10px;
+    color: var(--ink);
+  }
+  .hint-percent {
+    font-weight: 800; font-size: 18px; color: #b91c1c;
+  }
+</style>
+</head>
+<body>
+
+  <div id="topBar">
+    <span>Мафия: <span id="nameDisplay"></span></span>
+    <span class="badge" id="connBadge">онлайн</span>
+  </div>
+
+  <button id="roleBtn" aria-label="Показать роль"></button>
+
+  <div id="content">
+    <div class="card" id="joinScreen">
+      <h1>Мафия</h1>
+      <div class="sub">Введите имя и код комнаты</div>
+      <label for="nameInput">Ваше имя</label>
+      <input id="nameInput" type="text" maxlength="20" placeholder="Например, Алекс" autocomplete="off" />
+      <label for="codeInput">Код комнаты</label>
+      <input id="codeInput" class="code" type="text" maxlength="4" placeholder="XXXX" autocomplete="off" />
+      <button id="joinBtn">Войти в игру</button>
+      <div class="error" id="errorMsg"></div>
+    </div>
+
+    <div class="card" id="waitScreen" style="display:none;">
+      <h1>Ожидание</h1>
+      <div class="sub">Ждём, пока ведущий начнёт игру</div>
+      <div class="spinner"></div>
+      <p class="status">Вы в комнате <b id="roomLabel"></b></p>
+    </div>
+  </div>
+
+  <div id="nightScreen">
+    <div class="card">
+      <h1 style="margin-bottom:4px;">Ночь <span id="nightDay"></span></h1>
+      <div class="sub" id="nightSub">Спите…</div>
+      <div id="nightTimer">—</div>
+
+      <div id="donFeedback" class="feedback-note" style="display:none;"></div>
+      <div id="blockedNote" class="blocked-note" style="display:none;">
+        Вы прекрасно провели время с красавчиком и устали. В эту ночь вы не можете совершать действий.
+      </div>
+
+      <div id="nightActionArea" style="display:none;">
+        <div id="donModeSwitch" class="mode-switch" style="display:none;">
+          <button id="modeKill" class="active">Убить</button>
+          <button id="modeInvite">Пригласить</button>
+        </div>
+        <div id="recruitsLeftBox" class="recruits-left" style="display:none;"></div>
+        <div class="sub" id="nightInstruction"></div>
+        <ul id="nightTargets" class="targets"></ul>
+        <button id="nightConfirmBtn" style="display:none; margin-top:12px;">Подтвердить</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="dayScreen">
+    <div class="card">
+      <h1 style="margin-bottom:4px;">День <span id="dayDay"></span></h1>
+      <div class="sub" id="daySub">Обсуждайте и голосуйте</div>
+
+      <div id="revoteNote" class="feedback-note" style="display:none;">
+        Переголосование: голосуйте только за кандидатов
+      </div>
+
+      <div id="dayActionArea" style="display:none;">
+        <div class="sub">Кто подозрительный?</div>
+        <ul id="dayTargets" class="targets"></ul>
+        <div class="tie-info" id="dayHint"></div>
+        <button id="clearVoteBtn" style="margin-top:12px; background: var(--bg-2);">Снять голос</button>
+      </div>
+
+      <div id="dayDeadNote" class="sub" style="display:none;">Вы погибли. Наблюдаете молча.</div>
+    </div>
+  </div>
+
+  <div id="roleModal">
+    <div class="role-card">
+      <div class="role-top">
+        <div class="role-label">ВАША РОЛЬ</div>
+        <div class="role-title" id="roleTitle">—</div>
+      </div>
+      <div class="role-portrait" id="rolePortrait"></div>
+      <div class="role-desc" id="roleDesc"></div>
+      <button class="modal-close" id="closeModal">Скрыть</button>
+    </div>
+  </div>
+
+  <div id="resultModal">
+    <div class="role-card">
+      <div class="role-top">
+        <div class="role-label" id="resultLabel">РЕЗУЛЬТАТ</div>
+        <div class="role-title" id="resultTitle">—</div>
+      </div>
+      <div class="role-portrait" id="resultPortrait"></div>
+      <div class="role-desc" id="resultDesc"></div>
+      <button class="modal-close" id="resultClose">Понятно</button>
+    </div>
+  </div>
+
+  <div id="peekModal">
+    <div class="role-card">
+      <div class="role-top">
+        <div class="role-label">ИГРОК</div>
+        <div class="role-title unknown" id="peekName">—</div>
+      </div>
+      <div class="role-portrait" id="peekPortrait"></div>
+      <div class="role-desc" id="peekDesc">Неизвестный. Его роль скрыта.</div>
+      <button class="modal-close" id="peekClose">Закрыть</button>
+    </div>
+  </div>
+
+  <div id="inviteModal">
+    <div class="role-card">
+      <div class="role-top">
+        <div class="role-label">ПРИГЛАШЕНИЕ</div>
+        <div class="role-title mafia" style="font-size:20px;">Дон приглашает вас в мафию</div>
+      </div>
+      <div class="role-portrait" id="invitePortrait"></div>
+      <div class="role-desc" id="inviteDesc">
+        Принять предложение? Если согласитесь — ваша роль сменится на <b>Мафию</b>, и вы будете действовать ночью вместе с Доном. Если откажетесь — ничего не изменится.
+      </div>
+      <div class="invite-actions">
+        <button class="accept" id="inviteAccept">Принять</button>
+        <button class="reject" id="inviteReject">Отклонить</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="hintResultModal">
+    <div class="role-card">
+      <div class="role-top">
+        <div class="role-label">ПОДСКАЗКА</div>
+        <div class="role-title" id="hintTitle" style="font-size:18px;">—</div>
+      </div>
+      <ul class="hint-list" id="hintList"></ul>
+      <div class="role-desc" style="padding-top:0;">
+        Это подсказка только для вас. Вы можете поделиться ею с другими — или скрыть.
+      </div>
+      <button class="modal-close" id="hintClose">Понятно</button>
+    </div>
+  </div>
+
+<script>
+  const socket = io();
+
+  const joinScreen = document.getElementById('joinScreen');
+  const waitScreen = document.getElementById('waitScreen');
+  const nameInput = document.getElementById('nameInput');
+  const codeInput = document.getElementById('codeInput');
+  const joinBtn = document.getElementById('joinBtn');
+  const errorMsg = document.getElementById('errorMsg');
+  const roomLabel = document.getElementById('roomLabel');
+  const topBar = document.getElementById('topBar');
+  const nameDisplay = document.getElementById('nameDisplay');
+  const connBadge = document.getElementById('connBadge');
+  const roleBtn = document.getElementById('roleBtn');
+  const roleModal = document.getElementById('roleModal');
+  const roleTitle = document.getElementById('roleTitle');
+  const rolePortrait = document.getElementById('rolePortrait');
+  const roleDesc = document.getElementById('roleDesc');
+  const closeModal = document.getElementById('closeModal');
+  const resultModal = document.getElementById('resultModal');
+  const resultLabel = document.getElementById('resultLabel');
+  const resultTitle = document.getElementById('resultTitle');
+  const resultPortrait = document.getElementById('resultPortrait');
+  const resultDesc = document.getElementById('resultDesc');
+  const resultClose = document.getElementById('resultClose');
+  const peekModal = document.getElementById('peekModal');
+  const peekName = document.getElementById('peekName');
+  const peekPortrait = document.getElementById('peekPortrait');
+  const peekDesc = document.getElementById('peekDesc');
+  const peekClose = document.getElementById('peekClose');
+  const inviteModal = document.getElementById('inviteModal');
+  const invitePortrait = document.getElementById('invitePortrait');
+  const inviteAccept = document.getElementById('inviteAccept');
+  const inviteReject = document.getElementById('inviteReject');
+
+  const hintResultModal = document.getElementById('hintResultModal');
+  const hintTitle = document.getElementById('hintTitle');
+  const hintList = document.getElementById('hintList');
+  const hintClose = document.getElementById('hintClose');
+
+  const nightScreen = document.getElementById('nightScreen');
+  const nightDay = document.getElementById('nightDay');
+  const nightSub = document.getElementById('nightSub');
+  const nightTimer = document.getElementById('nightTimer');
+  const nightActionArea = document.getElementById('nightActionArea');
+  const nightInstruction = document.getElementById('nightInstruction');
+  const nightTargets = document.getElementById('nightTargets');
+  const nightConfirmBtn = document.getElementById('nightConfirmBtn');
+  const donModeSwitch = document.getElementById('donModeSwitch');
+  const modeKill = document.getElementById('modeKill');
+  const modeInvite = document.getElementById('modeInvite');
+  const recruitsLeftBox = document.getElementById('recruitsLeftBox');
+  const donFeedback = document.getElementById('donFeedback');
+  const blockedNote = document.getElementById('blockedNote');
+
+  const dayScreen = document.getElementById('dayScreen');
+  const dayDay = document.getElementById('dayDay');
+  const daySub = document.getElementById('daySub');
+  const dayActionArea = document.getElementById('dayActionArea');
+  const dayTargets = document.getElementById('dayTargets');
+  const dayHint = document.getElementById('dayHint');
+  const clearVoteBtn = document.getElementById('clearVoteBtn');
+  const dayDeadNote = document.getElementById('dayDeadNote');
+  const revoteNote = document.getElementById('revoteNote');
+
+  let roomId = null, playerToken = null, playerName = null, myRole = null, myId = null;
+  let nightData = null;
+  let nightInterval = null;
+  let nightDeadline = 0;
+  let journalSelected = [];
+  let dayData = null;
+  let myVote = null;
+  let donMode = 'kill';
+
+  const ROLES = {
+    citizen: { label: 'МИРНЫЙ ЖИТЕЛЬ',
+      desc: 'Днём вы участвуете в обсуждении и голосовании. Ваша задача — вычислить мафию и не дать ей победить. Ночью вы спите.' },
+    mafia: { label: 'МАФИЯ',
+      desc: 'Ночью вы вместе с другими мафиями выбираете жертву. Чтобы убийство состоялось, <b>все живые мафии (и Дон, если есть) должны выбрать одного и того же игрока</b>. Днём притворяйтесь мирным.' },
+    don: { label: 'ДОН',
+      desc: 'Глава мафии. Ночью вы можете совершить <b>одно действие</b>: либо выбрать жертву вместе с мафией, либо пригласить игрока стать мафией. Приглашённый мирный может принять или отказаться (утром). Особые роли приглашение отклоняют. Исход приглашения вы узнаете в свой следующий ход.' },
+    sheriff: { label: 'СЛЕДОВАТЕЛЬ',
+      desc: 'Ночью вы проверяете одного игрока и узнаёте, мафия он или нет. Днём помогайте городу найти преступников, но не выдавайте себя слишком рано.' },
+    doctor: { label: 'ДОКТОР',
+      desc: 'Ночью вы выбираете игрока, которого лечите. Если мафия выберет его же — он выживет. <b>Нельзя лечить одного и того же дважды подряд</b>. Себя можно спасти только один раз за игру.' },
+    maniac: { label: 'МАНЬЯК',
+      desc: 'Вы играете сами за себя. Каждую ночь вы выбираете жертву и убиваете её. Днём притворяйтесь мирным.' },
+    beauty: { label: 'КРАСАВЧИК',
+      desc: 'Ночью вы блокируете способность выбранного игрока (он не сможет совершить своё ночное действие). Кроме того, днём выбранный вами игрок <b>защищён от казни</b>. Себя выбирать нельзя. Нельзя выбрать одного и того же дважды подряд.' },
+    journalist: { label: 'ЖУРНАЛИСТ',
+      desc: 'Ночью вы выбираете двух игроков и сразу узнаёте, работают ли они в одной команде. Конкретные роли не раскрываются.' }
+  };
+
+  function showScreen(el) {
+    [joinScreen, waitScreen].forEach(s => s.style.display = 'none');
+    if (el) el.style.display = 'block';
+  }
+  function hideAllScreens() {
+    joinScreen.style.display = 'none';
+    waitScreen.style.display = 'none';
+    nightScreen.style.display = 'none';
+    dayScreen.style.display = 'none';
+  }
+  function setPortrait(el, image, alt) {
+    el.innerHTML = '';
+    if (image) {
+      const img = document.createElement('img');
+      img.src = image; img.alt = alt || '';
+      el.appendChild(img);
+    } else {
+      const ph = document.createElement('div');
+      ph.className = 'placeholder';
+      ph.textContent = 'изображение отсутствует';
+      el.appendChild(ph);
+    }
+  }
+
+  const urlParams = new URLSearchParams(location.search);
+  const roomFromUrl = urlParams.get('room');
+  if (roomFromUrl) codeInput.value = roomFromUrl.toUpperCase();
+
+  const saved = localStorage.getItem('mafia_player');
+  if (saved) {
+    try {
+      const s = JSON.parse(saved);
+      if (s.name) nameInput.value = s.name;
+      if (s.room && !roomFromUrl) codeInput.value = s.room;
+    } catch (e) {}
+  }
+
+  codeInput.addEventListener('input', () => {
+    codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  });
+
+  joinBtn.addEventListener('click', tryJoin);
+  nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryJoin(); });
+  codeInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryJoin(); });
+
+  function tryJoin() {
+    errorMsg.textContent = '';
+    const name = nameInput.value.trim();
+    const code = codeInput.value.trim().toUpperCase();
+    if (!name) return errorMsg.textContent = 'Введите имя';
+    if (code.length !== 4) return errorMsg.textContent = 'Код комнаты — 4 символа';
+
+    joinBtn.disabled = true;
+    joinBtn.textContent = 'Подключаемся…';
+
+    const s = localStorage.getItem('mafia_player');
+    let token = null;
+    if (s) {
+      try {
+        const parsed = JSON.parse(s);
+        if (parsed.room === code && parsed.token) token = parsed.token;
+      } catch (e) {}
+    }
+
+    socket.emit('joinGame', { roomId: code, name, playerToken: token }, (res) => {
+      joinBtn.disabled = false;
+      joinBtn.textContent = 'Войти в игру';
+      if (!res.ok) { errorMsg.textContent = res.error || 'Не удалось войти'; return; }
+      roomId = code;
+      playerToken = res.playerToken;
+      playerName = name;
+      myId = res.playerId;
+      localStorage.setItem('mafia_player', JSON.stringify({ name, room: code, token: playerToken }));
+      topBar.style.display = 'flex';
+      nameDisplay.textContent = name;
+      roomLabel.textContent = code;
+      showScreen(waitScreen);
+      updateConnBadge(true);
+    });
+  }
+
+  socket.on('yourRole', ({ role, name, image }) => {
+    myRole = role;
+    if (name) { playerName = name; nameDisplay.textContent = name; }
+    const data = ROLES[role];
+    if (!data) return;
+    roleTitle.textContent = data.label;
+    roleTitle.className = 'role-title ' + role;
+    setPortrait(rolePortrait, image, data.label);
+    roleDesc.innerHTML = data.desc;
+    roleBtn.style.display = 'flex';
+    openModal();
+  });
+
+  function openModal()  { roleModal.classList.add('open'); }
+  function closeModalFn() { roleModal.classList.remove('open'); }
+  roleBtn.addEventListener('click', openModal);
+  closeModal.addEventListener('click', closeModalFn);
+  roleModal.addEventListener('click', (e) => { if (e.target === roleModal) closeModalFn(); });
+  resultClose.addEventListener('click', () => resultModal.classList.remove('open'));
+  resultModal.addEventListener('click', (e) => { if (e.target === resultModal) resultModal.classList.remove('open'); });
+  peekClose.addEventListener('click', () => peekModal.classList.remove('open'));
+  peekModal.addEventListener('click', (e) => { if (e.target === peekModal) peekModal.classList.remove('open'); });
+
+  function updateConnBadge(online) {
+    connBadge.textContent = online ? 'онлайн' : 'оффлайн';
+    connBadge.className = 'badge' + (online ? '' : ' off');
+  }
+  socket.on('disconnect', () => updateConnBadge(false));
+  socket.on('connect', () => {
+    updateConnBadge(true);
+    if (roomId && playerToken) {
+      socket.emit('joinGame', { roomId, name: playerName, playerToken }, () => {});
+    }
+  });
+  socket.on('kicked', () => {
+    localStorage.removeItem('mafia_player');
+    alert('Ведущий удалил вас из игры');
+    location.reload();
+  });
+
+  socket.on('privateResult', (data) => {
+    if (data.type === 'sheriff') {
+      resultLabel.textContent = 'РЕЗУЛЬТАТ ПРОВЕРКИ';
+      resultTitle.textContent = data.isMafia ? 'ЭТО МАФИЯ' : 'НЕ МАФИЯ';
+      resultTitle.className = 'role-title ' + (data.isMafia ? 'mafia' : 'citizen');
+      resultDesc.innerHTML = data.message;
+      setPortrait(resultPortrait, null, '');
+      const img = new Image();
+      img.onload = () => setPortrait(resultPortrait, `/images/${data.targetRole}.jpg`, '');
+      img.onerror = () => {};
+      img.src = `/images/${data.targetRole}.jpg`;
+    }
+    if (data.type === 'journalist') {
+      resultLabel.textContent = 'РЕЗУЛЬТАТ ПРОВЕРКИ';
+      resultTitle.textContent = data.sameTeam ? 'ОДНА КОМАНДА' : 'РАЗНЫЕ КОМАНДЫ';
+      resultTitle.className = 'role-title ' + (data.sameTeam ? 'mafia' : 'citizen');
+      resultDesc.textContent = data.message;
+      setPortrait(resultPortrait, null, '');
+    }
+    resultModal.classList.add('open');
+  });
+
+  // ---- Подсказка ----
+  socket.on('hintResult', (data) => {
+    hintTitle.textContent = `Подсказка ${data.current} из ${data.total}`;
+    hintList.innerHTML = '';
+    data.players.forEach(p => {
+      const li = document.createElement('li');
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = p.name;
+      const percentSpan = document.createElement('span');
+      percentSpan.className = 'hint-percent';
+      percentSpan.textContent = p.percent + '%';
+      li.appendChild(nameSpan);
+      li.appendChild(percentSpan);
+      hintList.appendChild(li);
+    });
+    hintResultModal.classList.add('open');
+  });
+
+  hintClose.addEventListener('click', () => hintResultModal.classList.remove('open'));
+  hintResultModal.addEventListener('click', (e) => {
+    if (e.target === hintResultModal) hintResultModal.classList.remove('open');
+  });
+
+  socket.on('nightEnded', ({ day, deaths, youDied, pendingInvite }) => {
+    nightScreen.style.display = 'none';
+    if (youDied) {
+      setTimeout(() => alert('Вы погибли этой ночью'), 100);
+    } else if (deaths.length) {
+      setTimeout(() => alert('Утро. Погибли: ' + deaths.map(d => d.name).join(', ')), 100);
+    }
+    if (pendingInvite) {
+      setTimeout(() => inviteModal.classList.add('open'), 300);
+    } else {
+      showScreen(waitScreen);
+      roomLabel.textContent = roomId;
+    }
+  });
+
+  inviteAccept.addEventListener('click', () => {
+    socket.emit('respondInvite', { roomId, accept: true }, () => {});
+    inviteModal.classList.remove('open');
+    showScreen(waitScreen);
+    roomLabel.textContent = roomId;
+  });
+  inviteReject.addEventListener('click', () => {
+    socket.emit('respondInvite', { roomId, accept: false }, () => {});
+    inviteModal.classList.remove('open');
+    showScreen(waitScreen);
+    roomLabel.textContent = roomId;
+  });
+
+  function peekPlayer(playerId) {
+    socket.emit('peekPlayer', { roomId, playerId }, (res) => {
+      if (!res?.ok) return;
+      peekName.textContent = res.name + (res.alive ? '' : ' (погиб)');
+      setPortrait(peekPortrait, res.image, 'Неизвестный');
+      peekDesc.textContent = 'Неизвестный. Его роль скрыта.';
+      peekModal.classList.add('open');
+    });
+  }
+
+  socket.on('phaseChanged', ({ phase, day }) => {
+    hideAllScreens();
+    if (nightInterval) { clearInterval(nightInterval); nightInterval = null; }
+    if (phase === 'roles') { showScreen(waitScreen); roomLabel.textContent = roomId; }
+    if (phase === 'night') { nightScreen.style.display = 'block'; nightDay.textContent = day; }
+    if (phase === 'day') { dayScreen.style.display = 'block'; dayDay.textContent = day; }
+  });
+
+  socket.on('nightState', (data) => {
+    nightData = data;
+    if (data.stepRole === null) {
+      nightSub.textContent = 'Переход…';
+      nightTimer.textContent = '—';
+      nightActionArea.style.display = 'none';
+      if (nightInterval) { clearInterval(nightInterval); nightInterval = null; }
+      return;
+    }
+    nightDeadline = Date.now() + data.seconds * 1000;
+    updateTimer();
+    if (nightInterval) clearInterval(nightInterval);
+    nightInterval = setInterval(updateTimer, 250);
+
+    if (data.donFeedback) {
+      donFeedback.style.display = 'block';
+      donFeedback.textContent = data.donFeedback;
+    } else {
+      donFeedback.style.display = 'none';
+    }
+
+    if (!data.alive) {
+      nightSub.textContent = 'Вы погибли. Наблюдаете молча.';
+      blockedNote.style.display = 'none';
+      nightActionArea.style.display = 'none';
+      return;
+    }
+
+    if (data.blocked) {
+      nightSub.textContent = '';
+      blockedNote.style.display = 'block';
+      nightActionArea.style.display = 'none';
+      return;
+    } else {
+      blockedNote.style.display = 'none';
+    }
+
+    if (data.yourTurn) {
+      nightSub.textContent = `Ваш ход: ${data.stepLabel}`;
+      renderNightTargets(data);
+      nightActionArea.style.display = 'block';
+    } else {
+      nightSub.textContent = `Спите… (сейчас ход: ${data.stepLabel})`;
+      nightActionArea.style.display = 'none';
+    }
+  });
+
+  function updateTimer() {
+    const left = Math.max(0, Math.ceil((nightDeadline - Date.now()) / 1000));
+    nightTimer.textContent = left + 'с';
+  }
+
+  function renderNightTargets(data) {
+    const role = data.yourRole;
+    const isMafiaStep = data.stepRole === 'mafia_don';
+    const roleHints = {
+      mafia: 'Выберите жертву. Все мафии (и Дон) должны проголосовать за одного.',
+      don: 'Выберите жертву (все мафии должны согласиться) или пригласите игрока в мафию. Одно действие за ночь.',
+      sheriff: 'Выберите игрока для проверки — сразу увидите результат.',
+      doctor: 'Выберите игрока для лечения.',
+      maniac: 'Выберите жертву.',
+      beauty: 'Выберите игрока, чтобы заблокировать его действие. Он будет защищён от казни днём.',
+      journalist: 'Выберите ДВУХ игроков — сразу узнаете, в одной ли они команде.'
+    };
+    nightInstruction.textContent = roleHints[role] || 'Выберите цель.';
+    nightConfirmBtn.style.display = 'none';
+    journalSelected = [];
+
+    const alreadyActed = data.myMafiaAction !== null;
+    if (role === 'don' && isMafiaStep && !alreadyActed) {
+      donModeSwitch.style.display = 'flex';
+      modeKill.classList.toggle('active', donMode === 'kill');
+      modeInvite.classList.toggle('active', donMode === 'invite');
+      recruitsLeftBox.style.display = 'block';
+      const left = data.recruitsLeft ?? 0;
+      recruitsLeftBox.textContent = `Приглашений осталось: ${left}`;
+      if (left <= 0) {
+        modeInvite.disabled = true;
+        if (donMode === 'invite') { donMode = 'kill'; modeKill.classList.add('active'); modeInvite.classList.remove('active'); }
+      } else {
+        modeInvite.disabled = false;
+      }
+    } else {
+      donModeSwitch.style.display = 'none';
+      recruitsLeftBox.style.display = 'none';
+    }
+
+    nightTargets.innerHTML = '';
+
+    if (alreadyActed && (role === 'mafia' || role === 'don')) {
+      const li = document.createElement('li');
+      li.className = 'feedback-note';
+      const act = data.myMafiaAction;
+      const target = data.players.find(p => p.id === act.targetId);
+      li.textContent = act.mode === 'kill'
+        ? `Вы выбрали убить: ${target ? target.name : '?'}`
+        : `Вы пригласили: ${target ? target.name : '?'}`;
+      nightTargets.appendChild(li);
+    }
+
+    data.players.forEach(p => {
+      if (!p.alive || p.id === data.yourId) return;
+      if (alreadyActed && (role === 'mafia' || role === 'don')) return;
+
+      const li = document.createElement('li');
+      li.className = 'target';
+      li.dataset.id = p.id;
+
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = p.name;
+      li.appendChild(nameSpan);
+
+      if (isMafiaStep && (role === 'mafia' || role === 'don') && data.mafiaVotes) {
+        const votesFor = Object.entries(data.mafiaVotes)
+          .filter(([, act]) => act && act.targetId === p.id);
+        const killVotes = votesFor.filter(([, act]) => act.mode === 'kill').length;
+        const inviteVotes = votesFor.filter(([, act]) => act.mode === 'invite').length;
+
+        if (killVotes > 0 || inviteVotes > 0) {
+          const dots = document.createElement('span');
+          dots.className = 'vote-dots';
+          for (let i = 0; i < killVotes; i++) {
+            const d = document.createElement('span'); d.className = 'd'; dots.appendChild(d);
+          }
+          for (let i = 0; i < inviteVotes; i++) {
+            const d = document.createElement('span'); d.className = 'd invite'; dots.appendChild(d);
+          }
+          const names = votesFor.map(([actorId, act]) => {
+            const actor = data.players.find(pp => pp.id === actorId);
+            return (actor ? actor.name : '?') + (act.mode === 'invite' ? ' (приглашает)' : '');
+          });
+          dots.title = names.join(', ');
+          li.appendChild(dots);
+        }
+      }
+
+      li.onclick = () => {
+        if (role === 'journalist') {
+          toggleJournalistPick(li, p.id);
+        } else if (role === 'don' && isMafiaStep) {
+          socket.emit('nightAction', { roomId, targetId: p.id, mode: donMode }, (res) => {
+            if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
+            else if (res.invite === 'declined') alert('Этот игрок отказался (особая роль)');
+            else if (res.invite === 'pending') alert('Приглашение отправлено. Ответ узнаете утром, а исход — в следующий ход.');
+          });
+        } else if ((role === 'mafia') && isMafiaStep) {
+          socket.emit('nightAction', { roomId, targetId: p.id, mode: 'kill' }, (res) => {
+            if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
+          });
+        } else {
+          socket.emit('nightAction', { roomId, targetId: p.id }, (res) => {
+            if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
+          });
+        }
+      };
+
+      nightTargets.appendChild(li);
+    });
+  }
+
+  modeKill.addEventListener('click', () => {
+    donMode = 'kill';
+    modeKill.classList.add('active');
+    modeInvite.classList.remove('active');
+  });
+  modeInvite.addEventListener('click', () => {
+    donMode = 'invite';
+    modeInvite.classList.add('active');
+    modeKill.classList.remove('active');
+  });
+
+  function toggleJournalistPick(li, playerId) {
+    const idx = journalSelected.indexOf(playerId);
+    if (idx >= 0) {
+      journalSelected.splice(idx, 1);
+      li.classList.remove('selected');
+    } else {
+      if (journalSelected.length >= 2) return;
+      journalSelected.push(playerId);
+      li.classList.add('selected');
+    }
+    nightConfirmBtn.style.display = journalSelected.length === 2 ? 'block' : 'none';
+  }
+
+  nightConfirmBtn.addEventListener('click', () => {
+    if (journalSelected.length !== 2) return;
+    socket.emit('nightAction', { roomId, targetId: journalSelected.slice() }, (res) => {
+      if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
+      else nightConfirmBtn.style.display = 'none';
+    });
+  });
+
+  socket.on('dayState', (data) => {
+    dayData = data;
+    myVote = null;
+    dayScreen.style.display = 'block';
+    dayDay.textContent = data.day;
+
+    if (data.revoteCandidates && data.revoteCandidates.length) {
+      revoteNote.style.display = 'block';
+    } else {
+      revoteNote.style.display = 'none';
+    }
+
+    if (!data.alive) {
+      daySub.textContent = 'Обсуждение идёт.';
+      dayActionArea.style.display = 'none';
+      dayDeadNote.style.display = 'block';
+      return;
+    }
+
+    daySub.textContent = 'Обсуждайте и голосуйте. Клик по игроку — посмотреть карточку.';
+    dayActionArea.style.display = 'block';
+    dayDeadNote.style.display = 'none';
+    renderDayTargets(data);
+  });
+
+  function renderDayTargets(data) {
+    dayTargets.innerHTML = '';
+    const votes = data.votes || {};
+    const immunity = data.immunity || [];
+    const revote = data.revoteCandidates || null;
+    for (const [voterId, targetId] of Object.entries(votes)) {
+      if (voterId === data.yourId) myVote = targetId;
+    }
+
+    data.players.forEach(p => {
+      const li = document.createElement('li');
+      li.className = 'target';
+      if (!p.alive) li.classList.add('dead');
+      if (immunity.includes(p.id)) li.classList.add('immune');
+
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = p.name;
+      if (p.id === data.yourId) nameSpan.textContent += ' (вы)';
+      if (immunity.includes(p.id)) nameSpan.textContent += ' (защищён)';
+      if (revote && revote.includes(p.id)) nameSpan.textContent += ' — кандидат';
+      li.appendChild(nameSpan);
+
+      const votersForTarget = Object.entries(votes)
+        .filter(([, t]) => t === p.id)
+        .map(([vid]) => data.players.find(pp => pp.id === vid)?.name || '?');
+
+      if (votersForTarget.length) {
+        const dots = document.createElement('span');
+        dots.className = 'vote-dots';
+        votersForTarget.forEach(() => {
+          const d = document.createElement('span');
+          d.className = 'd';
+          dots.appendChild(d);
+        });
+        dots.title = votersForTarget.join(', ');
+        li.appendChild(dots);
+      }
+
+      if (myVote === p.id) li.classList.add('selected');
+
+      const canVote = data.alive && p.alive && !immunity.includes(p.id)
+        && (!revote || revote.includes(p.id));
+
+      if (canVote) {
+        const voteBtn = document.createElement('button');
+        voteBtn.textContent = myVote === p.id ? 'Отменить' : 'Голосовать';
+        voteBtn.style.padding = '6px 12px';
+        voteBtn.style.fontSize = '13px';
+        voteBtn.style.width = 'auto';
+        voteBtn.style.marginLeft = '8px';
+        voteBtn.onclick = (e) => {
+          e.stopPropagation();
+          const newTarget = myVote === p.id ? null : p.id;
+          socket.emit('dayVote', { roomId, targetId: newTarget }, (res) => {
+            if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
+          });
+        };
+        li.appendChild(voteBtn);
+      }
+
+      li.onclick = () => {
+        if (!p.alive) return;
+        if (p.id === data.yourId) return;
+        peekPlayer(p.id);
+      };
+
+      dayTargets.appendChild(li);
+    });
+  }
+
+  clearVoteBtn.addEventListener('click', () => {
+    if (myVote) socket.emit('dayVote', { roomId, targetId: null }, () => {});
+  });
+
+  socket.on('revoteStarted', ({ candidates }) => {
+    alert('Ничья! Переголосование между: ' + candidates.map(c => c.name).join(', '));
+  });
+
+  socket.on('dayResults', ({ day, lynched, tie }) => {
+    dayActionArea.style.display = 'none';
+    if (lynched) alert(`День ${day}. Казнён: ${lynched.name}`);
+    else if (tie) alert(`День ${day}. Ничья — никто не казнён`);
+    else alert(`День ${day}. Никто не казнён`);
+  });
+
+  socket.on('gameOver', ({ winner }) => {
+    alert(winner === 'mafia' ? 'Игра окончена: победила МАФИЯ!' : 'Игра окончена: победили МИРНЫЕ!');
+  });
+</script>
+</body>
+</html>
