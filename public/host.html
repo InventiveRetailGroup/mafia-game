@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Мафия — Панель ведущего</title>
 <script src="/socket.io/socket.io.js"></script>
+<script src="/roles.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <style>
   * { box-sizing: border-box; }
@@ -126,6 +127,127 @@
   .hint-actions { display: flex; gap: 8px; margin-top: 12px; }
   .hint-actions button { flex: 1; }
   .hint-actions button.cancel { background: #64748b; }
+
+  /* Кнопка "Роли в игре" */
+  #rolesBtn {
+    width: auto; padding: 10px 20px; font-size: 14px;
+    background: var(--bg-2); margin-top: 12px; display: none;
+  }
+  #rolesBtn:hover:not(:disabled) { background: var(--bg-3); }
+
+  /* Галерея ролей */
+  #rolesGalleryModal {
+    position: fixed; inset: 0;
+    background: rgba(15, 31, 74, 0.92);
+    display: none; z-index: 150;
+    padding: 24px 16px; overflow-y: auto;
+  }
+  #rolesGalleryModal.open { display: block; }
+  .gallery-header {
+    max-width: 1100px; margin: 0 auto 20px;
+    display: flex; justify-content: space-between; align-items: center;
+    color: #ffffff;
+  }
+  .gallery-header h2 { margin: 0; font-size: 22px; }
+  .gallery-close {
+    width: auto; padding: 10px 18px;
+    background: #dc2626; font-size: 14px;
+  }
+  .gallery-close:hover { background: #ef4444; }
+  .gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 16px;
+    max-width: 1100px; margin: 0 auto;
+  }
+  .gallery-card {
+    background: var(--card);
+    border-radius: 14px; overflow: hidden;
+    border: 2px solid var(--accent);
+    cursor: pointer;
+    display: flex; flex-direction: column;
+    color: var(--ink);
+    transition: transform 0.15s;
+  }
+  .gallery-card:hover { transform: scale(1.02); }
+  .gallery-card .gallery-card-title {
+    background: var(--bg-2); color: #ffffff;
+    text-align: center; padding: 10px 8px;
+    font-size: 14px; font-weight: 700; letter-spacing: 1px;
+  }
+  .gallery-card .gallery-card-image {
+    aspect-ratio: 2 / 3;
+    background: linear-gradient(180deg, #dbeafe, #bfdbfe);
+    overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .gallery-card .gallery-card-image img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .gallery-card .gallery-card-image .placeholder {
+    color: var(--ink-soft); font-size: 14px; padding: 10px; text-align: center;
+  }
+  .gallery-card .gallery-card-btn {
+    width: 100%; border-radius: 0;
+    background: var(--accent); padding: 12px; font-size: 13px;
+  }
+
+  /* Раскрытая карточка */
+  #roleExpandedModal {
+    position: fixed; inset: 0;
+    background: rgba(15, 31, 74, 0.96);
+    display: none; align-items: center; justify-content: center;
+    padding: 20px; z-index: 160; overflow-y: auto;
+  }
+  #roleExpandedModal.open { display: flex; }
+  .expanded-card {
+    background: var(--card); border-radius: 18px;
+    width: 100%; max-width: 560px; overflow: hidden;
+    border: 2px solid var(--accent); color: var(--ink);
+    animation: expand 0.35s ease-out;
+    max-height: 92vh; display: flex; flex-direction: column;
+  }
+  @keyframes expand {
+    from { transform: scale(0.6); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+  .expanded-card .expanded-title {
+    background: var(--bg-2); color: #ffffff;
+    text-align: center; padding: 18px 20px;
+    font-size: 24px; font-weight: 800; letter-spacing: 2px;
+  }
+  .expanded-card .expanded-image {
+    height: 340px;
+    background: linear-gradient(180deg, #dbeafe, #bfdbfe);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    overflow: hidden; flex-shrink: 0;
+  }
+  .expanded-card .expanded-image img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .expanded-card .expanded-image .placeholder {
+    color: var(--ink-soft); font-size: 16px; text-align: center; padding: 20px;
+  }
+  .expanded-card .expanded-body {
+    padding: 18px 22px; overflow-y: auto; flex: 1;
+  }
+  .expanded-card .expanded-desc {
+    font-size: 15px; line-height: 1.55; margin-bottom: 14px;
+  }
+  .expanded-card .expanded-features {
+    background: var(--card-2); border-radius: 10px;
+    padding: 12px 14px; font-size: 14px; line-height: 1.5;
+  }
+  .expanded-card .expanded-features .role-section-title {
+    display: block; font-size: 12px; letter-spacing: 2px;
+    color: var(--ink-soft); margin-bottom: 6px;
+  }
+  .expanded-card .expanded-close {
+    width: calc(100% - 40px); margin: 0 20px 20px;
+    background: var(--bg-2); padding: 14px;
+  }
+  .expanded-card .expanded-close:hover { background: var(--bg-3); }
 </style>
 </head>
 <body>
@@ -145,6 +267,9 @@
       <p class="muted" style="text-align:center; margin-top:12px;">
         Игроки сканируют QR или переходят по ссылке
       </p>
+      <div style="text-align:center; margin-top:16px;">
+        <button id="rolesBtn">Роли в игре</button>
+      </div>
       <div style="text-align:center; margin-top:16px;">
         <button id="startBtn" class="start" disabled>Начать игру</button>
       </div>
@@ -240,8 +365,35 @@
     </div>
   </div>
 
+  <!-- Галерея ролей -->
+  <div id="rolesGalleryModal">
+    <div class="gallery-header">
+      <h2>Роли в игре</h2>
+      <button class="gallery-close" id="galleryCloseBtn">Закрыть</button>
+    </div>
+    <div class="gallery-grid" id="galleryGrid"></div>
+  </div>
+
+  <!-- Раскрытая карточка -->
+  <div id="roleExpandedModal">
+    <div class="expanded-card">
+      <div class="expanded-title" id="expandedTitle">—</div>
+      <div class="expanded-image" id="expandedImage"></div>
+      <div class="expanded-body">
+        <div class="expanded-desc" id="expandedDesc"></div>
+        <div class="expanded-features">
+          <span class="role-section-title">ОСОБЕННОСТИ</span>
+          <div id="expandedFeatures"></div>
+        </div>
+      </div>
+      <button class="expanded-close" id="expandedCloseBtn">Свернуть</button>
+    </div>
+  </div>
+
 <script>
   const socket = io();
+  const ROLES = window.ROLE_INFO;
+
   const createBtn = document.getElementById('createBtn');
   const statusEl = document.getElementById('status');
   const setupEl = document.getElementById('setup');
@@ -288,6 +440,17 @@
   const hintTotalInput = document.getElementById('hintTotalInput');
   const hintTotalCancel = document.getElementById('hintTotalCancel');
   const hintTotalConfirm = document.getElementById('hintTotalConfirm');
+
+  const rolesBtn = document.getElementById('rolesBtn');
+  const rolesGalleryModal = document.getElementById('rolesGalleryModal');
+  const galleryGrid = document.getElementById('galleryGrid');
+  const galleryCloseBtn = document.getElementById('galleryCloseBtn');
+  const roleExpandedModal = document.getElementById('roleExpandedModal');
+  const expandedTitle = document.getElementById('expandedTitle');
+  const expandedImage = document.getElementById('expandedImage');
+  const expandedDesc = document.getElementById('expandedDesc');
+  const expandedFeatures = document.getElementById('expandedFeatures');
+  const expandedCloseBtn = document.getElementById('expandedCloseBtn');
 
   let roomId = null;
   let hostToken = null;
@@ -349,7 +512,6 @@
   // ---- Подсказки ----
   hintBtn.addEventListener('click', () => {
     if (currentHintsTotal === 0) {
-      // Сначала спрашиваем общее число
       hintTotalModal.classList.add('open');
       hintTotalInput.value = 3;
     } else {
@@ -435,7 +597,67 @@
     QRCode.toCanvas(canvas, url, { width: 240, margin: 1 }, (err) => {
       if (err) console.error(err);
     });
+    rolesBtn.style.display = 'inline-block';
   }
+
+  // ---- Галерея ролей ----
+  function buildGallery() {
+    galleryGrid.innerHTML = '';
+    const order = ['citizen', 'mafia', 'don', 'sheriff', 'doctor', 'maniac', 'beauty', 'journalist', 'unknown'];
+    order.forEach(role => {
+      const info = ROLES[role];
+      if (!info) return;
+      const card = document.createElement('div');
+      card.className = 'gallery-card';
+
+      const title = document.createElement('div');
+      title.className = 'gallery-card-title';
+      title.textContent = info.label;
+      card.appendChild(title);
+
+      const imageBox = document.createElement('div');
+      imageBox.className = 'gallery-card-image';
+      const img = new Image();
+      img.onload = () => { imageBox.innerHTML = ''; imageBox.appendChild(img); };
+      img.onerror = () => { imageBox.innerHTML = '<div class="placeholder">изображение отсутствует</div>'; };
+      img.src = `/images/${info.image}.jpg`;
+      card.appendChild(imageBox);
+
+      const btn = document.createElement('button');
+      btn.className = 'gallery-card-btn';
+      btn.textContent = 'Подробнее';
+      btn.onclick = (e) => { e.stopPropagation(); openExpanded(role); };
+      card.appendChild(btn);
+
+      galleryGrid.appendChild(card);
+    });
+  }
+
+  function openGallery() {
+    buildGallery();
+    rolesGalleryModal.classList.add('open');
+  }
+  function closeGallery() {
+    rolesGalleryModal.classList.remove('open');
+    roleExpandedModal.classList.remove('open');
+  }
+  rolesBtn.addEventListener('click', openGallery);
+  galleryCloseBtn.addEventListener('click', closeGallery);
+
+  function openExpanded(role) {
+    const info = ROLES[role];
+    if (!info) return;
+    expandedTitle.textContent = info.label;
+    expandedDesc.textContent = info.description || '';
+    expandedFeatures.textContent = info.features || '';
+    expandedImage.innerHTML = '';
+    const img = new Image();
+    img.onload = () => { expandedImage.innerHTML = ''; expandedImage.appendChild(img); };
+    img.onerror = () => { expandedImage.innerHTML = '<div class="placeholder">изображение отсутствует</div>'; };
+    img.src = `/images/${info.image}.jpg`;
+    roleExpandedModal.classList.add('open');
+  }
+  expandedCloseBtn.addEventListener('click', () => roleExpandedModal.classList.remove('open'));
 
   socket.on('lobbyState', (state) => {
     if (!roomId || state.roomId !== roomId) return;
@@ -512,6 +734,8 @@
     gameList.style.display = 'block';
     startBtn.disabled = true;
     startHint.textContent = 'Игра началась';
+    rolesBtn.style.display = 'none';
+    closeGallery();
 
     const mafia = [], special = [], citizens = [];
     state.players.forEach(p => {
@@ -526,6 +750,10 @@
   });
 
   socket.on('phaseChanged', ({ phase }) => {
+    if (phase === 'roles' || phase === 'night' || phase === 'day') {
+      rolesBtn.style.display = 'none';
+      closeGallery();
+    }
     if (phase === 'roles') {
       nightControls.style.display = 'block';
       nightBtn.disabled = false;

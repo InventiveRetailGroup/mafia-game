@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>Мафия</title>
 <script src="/socket.io/socket.io.js"></script>
+<script src="/roles.js"></script>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   :root {
@@ -135,6 +136,22 @@
     font-size: 15px; line-height: 1.55; text-align: center;
   }
   .role-desc b { color: var(--accent); }
+  .role-section {
+    text-align: left;
+    margin-top: 8px;
+    padding: 12px 14px;
+    background: var(--card-2);
+    border-radius: 10px;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .role-section .role-section-title {
+    display: block;
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--ink-soft);
+    margin-bottom: 6px;
+  }
 
   .modal-close {
     margin: 0 20px 20px; background: var(--bg-2);
@@ -231,7 +248,6 @@
     font-size: 14px;
     margin-bottom: 12px;
   }
-  /* Подсказка */
   .hint-list { padding: 0 20px; }
   .hint-list li {
     display: flex; justify-content: space-between; align-items: center;
@@ -242,6 +258,162 @@
   .hint-percent {
     font-weight: 800; font-size: 18px; color: #b91c1c;
   }
+
+  /* Кнопка "Роли в игре" */
+  #rolesBtn {
+    width: auto;
+    padding: 10px 20px;
+    font-size: 14px;
+    background: var(--bg-2);
+    margin-top: 12px;
+    display: inline-block;
+  }
+  #rolesBtn:hover:not(:disabled) { background: var(--bg-3); }
+
+  /* Галерея ролей */
+  #rolesGalleryModal {
+    position: fixed; inset: 0;
+    background: rgba(15, 31, 74, 0.92);
+    display: none;
+    z-index: 150;
+    padding: 24px 16px;
+    overflow-y: auto;
+  }
+  #rolesGalleryModal.open { display: block; }
+  .gallery-header {
+    max-width: 1100px; margin: 0 auto 20px;
+    display: flex; justify-content: space-between; align-items: center;
+    color: #ffffff;
+  }
+  .gallery-header h2 { margin: 0; font-size: 22px; }
+  .gallery-close {
+    width: auto; padding: 10px 18px;
+    background: #dc2626; font-size: 14px;
+  }
+  .gallery-close:hover { background: #ef4444; }
+  .gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 16px;
+    max-width: 1100px; margin: 0 auto;
+  }
+  .gallery-card {
+    background: var(--card);
+    border-radius: 14px;
+    overflow: hidden;
+    border: 2px solid var(--accent);
+    cursor: pointer;
+    display: flex; flex-direction: column;
+    color: var(--ink);
+    transition: transform 0.15s;
+  }
+  .gallery-card:hover { transform: scale(1.02); }
+  .gallery-card .gallery-card-title {
+    background: var(--bg-2);
+    color: #ffffff;
+    text-align: center;
+    padding: 10px 8px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+  .gallery-card .gallery-card-image {
+    aspect-ratio: 2 / 3;
+    background: linear-gradient(180deg, #dbeafe, #bfdbfe);
+    overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .gallery-card .gallery-card-image img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .gallery-card .gallery-card-image .placeholder {
+    color: var(--ink-soft); font-size: 14px; padding: 10px; text-align: center;
+  }
+  .gallery-card .gallery-card-btn {
+    width: 100%;
+    border-radius: 0;
+    background: var(--accent);
+    padding: 12px;
+    font-size: 13px;
+  }
+
+  /* Раскрытая карточка роли */
+  #roleExpandedModal {
+    position: fixed; inset: 0;
+    background: rgba(15, 31, 74, 0.96);
+    display: none;
+    align-items: center; justify-content: center;
+    padding: 20px;
+    z-index: 160;
+    overflow-y: auto;
+  }
+  #roleExpandedModal.open { display: flex; }
+  .expanded-card {
+    background: var(--card);
+    border-radius: 18px;
+    width: 100%; max-width: 560px;
+    overflow: hidden;
+    border: 2px solid var(--accent);
+    color: var(--ink);
+    animation: expand 0.35s ease-out;
+    max-height: 92vh;
+    display: flex; flex-direction: column;
+  }
+  @keyframes expand {
+    from { transform: scale(0.6); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+  .expanded-card .expanded-title {
+    background: var(--bg-2);
+    color: #ffffff;
+    text-align: center;
+    padding: 18px 20px;
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: 2px;
+  }
+  .expanded-card .expanded-image {
+    height: 340px;
+    background: linear-gradient(180deg, #dbeafe, #bfdbfe);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .expanded-card .expanded-image img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .expanded-card .expanded-body {
+    padding: 18px 22px;
+    overflow-y: auto;
+    flex: 1;
+  }
+  .expanded-card .expanded-body .expanded-desc {
+    font-size: 15px;
+    line-height: 1.55;
+    margin-bottom: 14px;
+  }
+  .expanded-card .expanded-body .expanded-features {
+    background: var(--card-2);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .expanded-card .expanded-body .expanded-features .role-section-title {
+    display: block;
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--ink-soft);
+    margin-bottom: 6px;
+  }
+  .expanded-card .expanded-close {
+    width: calc(100% - 40px);
+    margin: 0 20px 20px;
+    background: var(--bg-2);
+    padding: 14px;
+  }
+  .expanded-card .expanded-close:hover { background: var(--bg-3); }
 </style>
 </head>
 <body>
@@ -270,6 +442,9 @@
       <div class="sub">Ждём, пока ведущий начнёт игру</div>
       <div class="spinner"></div>
       <p class="status">Вы в комнате <b id="roomLabel"></b></p>
+      <div style="text-align:center; margin-top:16px;">
+        <button id="rolesBtn" style="display:none;">Роли в игре</button>
+      </div>
     </div>
   </div>
 
@@ -384,6 +559,31 @@
     </div>
   </div>
 
+  <!-- Галерея ролей -->
+  <div id="rolesGalleryModal">
+    <div class="gallery-header">
+      <h2>Роли в игре</h2>
+      <button class="gallery-close" id="galleryCloseBtn">Закрыть</button>
+    </div>
+    <div class="gallery-grid" id="galleryGrid"></div>
+  </div>
+
+  <!-- Раскрытая карточка -->
+  <div id="roleExpandedModal">
+    <div class="expanded-card">
+      <div class="expanded-title" id="expandedTitle">—</div>
+      <div class="expanded-image" id="expandedImage"></div>
+      <div class="expanded-body">
+        <div class="expanded-desc" id="expandedDesc"></div>
+        <div class="expanded-features">
+          <span class="role-section-title">ОСОБЕННОСТИ</span>
+          <div id="expandedFeatures"></div>
+        </div>
+      </div>
+      <button class="expanded-close" id="expandedCloseBtn">Свернуть</button>
+    </div>
+  </div>
+
 <script>
   const socket = io();
 
@@ -449,6 +649,17 @@
   const dayDeadNote = document.getElementById('dayDeadNote');
   const revoteNote = document.getElementById('revoteNote');
 
+  const rolesBtn = document.getElementById('rolesBtn');
+  const rolesGalleryModal = document.getElementById('rolesGalleryModal');
+  const galleryGrid = document.getElementById('galleryGrid');
+  const galleryCloseBtn = document.getElementById('galleryCloseBtn');
+  const roleExpandedModal = document.getElementById('roleExpandedModal');
+  const expandedTitle = document.getElementById('expandedTitle');
+  const expandedImage = document.getElementById('expandedImage');
+  const expandedDesc = document.getElementById('expandedDesc');
+  const expandedFeatures = document.getElementById('expandedFeatures');
+  const expandedCloseBtn = document.getElementById('expandedCloseBtn');
+
   let roomId = null, playerToken = null, playerName = null, myRole = null, myId = null;
   let nightData = null;
   let nightInterval = null;
@@ -458,24 +669,8 @@
   let myVote = null;
   let donMode = 'kill';
 
-  const ROLES = {
-    citizen: { label: 'МИРНЫЙ ЖИТЕЛЬ',
-      desc: 'Днём вы участвуете в обсуждении и голосовании. Ваша задача — вычислить мафию и не дать ей победить. Ночью вы спите.' },
-    mafia: { label: 'МАФИЯ',
-      desc: 'Ночью вы вместе с другими мафиями выбираете жертву. Чтобы убийство состоялось, <b>все живые мафии (и Дон, если есть) должны выбрать одного и того же игрока</b>. Днём притворяйтесь мирным.' },
-    don: { label: 'ДОН',
-      desc: 'Глава мафии. Ночью вы можете совершить <b>одно действие</b>: либо выбрать жертву вместе с мафией, либо пригласить игрока стать мафией. Приглашённый мирный может принять или отказаться (утром). Особые роли приглашение отклоняют. Исход приглашения вы узнаете в свой следующий ход.' },
-    sheriff: { label: 'СЛЕДОВАТЕЛЬ',
-      desc: 'Ночью вы проверяете одного игрока и узнаёте, мафия он или нет. Днём помогайте городу найти преступников, но не выдавайте себя слишком рано.' },
-    doctor: { label: 'ДОКТОР',
-      desc: 'Ночью вы выбираете игрока, которого лечите. Если мафия выберет его же — он выживет. <b>Нельзя лечить одного и того же дважды подряд</b>. Себя можно спасти только один раз за игру.' },
-    maniac: { label: 'МАНЬЯК',
-      desc: 'Вы играете сами за себя. Каждую ночь вы выбираете жертву и убиваете её. Днём притворяйтесь мирным.' },
-    beauty: { label: 'КРАСАВЧИК',
-      desc: 'Ночью вы блокируете способность выбранного игрока (он не сможет совершить своё ночное действие). Кроме того, днём выбранный вами игрок <b>защищён от казни</b>. Себя выбирать нельзя. Нельзя выбрать одного и того же дважды подряд.' },
-    journalist: { label: 'ЖУРНАЛИСТ',
-      desc: 'Ночью вы выбираете двух игроков и сразу узнаёте, работают ли они в одной команде. Конкретные роли не раскрываются.' }
-  };
+  // ROLES берём из roles.js (window.ROLE_INFO)
+  const ROLES = window.ROLE_INFO;
 
   function showScreen(el) {
     [joinScreen, waitScreen].forEach(s => s.style.display = 'none');
@@ -500,6 +695,73 @@
       el.appendChild(ph);
     }
   }
+
+  // ---- Галерея ролей ----
+  function buildGallery() {
+    galleryGrid.innerHTML = '';
+    const order = ['citizen', 'mafia', 'don', 'sheriff', 'doctor', 'maniac', 'beauty', 'journalist', 'unknown'];
+    order.forEach(role => {
+      const info = ROLES[role];
+      if (!info) return;
+      const card = document.createElement('div');
+      card.className = 'gallery-card';
+
+      const title = document.createElement('div');
+      title.className = 'gallery-card-title';
+      title.textContent = info.label;
+      card.appendChild(title);
+
+      const imageBox = document.createElement('div');
+      imageBox.className = 'gallery-card-image';
+      const img = new Image();
+      img.onload = () => {
+        imageBox.innerHTML = '';
+        imageBox.appendChild(img);
+      };
+      img.onerror = () => {
+        imageBox.innerHTML = '<div class="placeholder">изображение отсутствует</div>';
+      };
+      img.src = `/images/${info.image}.jpg`;
+      card.appendChild(imageBox);
+
+      const btn = document.createElement('button');
+      btn.className = 'gallery-card-btn';
+      btn.textContent = 'Подробнее';
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        openExpanded(role);
+      };
+      card.appendChild(btn);
+
+      galleryGrid.appendChild(card);
+    });
+  }
+
+  function openGallery() {
+    buildGallery();
+    rolesGalleryModal.classList.add('open');
+  }
+  function closeGallery() {
+    rolesGalleryModal.classList.remove('open');
+    roleExpandedModal.classList.remove('open');
+  }
+  rolesBtn.addEventListener('click', openGallery);
+  galleryCloseBtn.addEventListener('click', closeGallery);
+
+  function openExpanded(role) {
+    const info = ROLES[role];
+    if (!info) return;
+    expandedTitle.textContent = info.label;
+    expandedDesc.textContent = info.description || '';
+    expandedFeatures.textContent = info.features || '';
+    expandedImage.innerHTML = '';
+    const img = new Image();
+    img.onload = () => { expandedImage.innerHTML = ''; expandedImage.appendChild(img); };
+    img.onerror = () => { expandedImage.innerHTML = '<div class="placeholder">изображение отсутствует</div>'; };
+    img.src = `/images/${info.image}.jpg`;
+    roleExpandedModal.classList.add('open');
+  }
+  expandedCloseBtn.addEventListener('click', () => roleExpandedModal.classList.remove('open'));
 
   const urlParams = new URLSearchParams(location.search);
   const roomFromUrl = urlParams.get('room');
@@ -554,6 +816,7 @@
       nameDisplay.textContent = name;
       roomLabel.textContent = code;
       showScreen(waitScreen);
+      rolesBtn.style.display = 'inline-block';
       updateConnBadge(true);
     });
   }
@@ -566,7 +829,18 @@
     roleTitle.textContent = data.label;
     roleTitle.className = 'role-title ' + role;
     setPortrait(rolePortrait, image, data.label);
-    roleDesc.innerHTML = data.desc;
+
+    // Описание + особенности
+    roleDesc.innerHTML = '';
+    const descBlock = document.createElement('div');
+    descBlock.className = 'role-section';
+    descBlock.innerHTML = `<span class="role-section-title">ОПИСАНИЕ</span>${escapeHtml(data.description || '')}`;
+    const featBlock = document.createElement('div');
+    featBlock.className = 'role-section';
+    featBlock.innerHTML = `<span class="role-section-title">ОСОБЕННОСТИ</span>${escapeHtml(data.features || '')}`;
+    roleDesc.appendChild(descBlock);
+    roleDesc.appendChild(featBlock);
+
     roleBtn.style.display = 'flex';
     openModal();
   });
@@ -620,7 +894,6 @@
     resultModal.classList.add('open');
   });
 
-  // ---- Подсказка ----
   socket.on('hintResult', (data) => {
     hintTitle.textContent = `Подсказка ${data.current} из ${data.total}`;
     hintList.innerHTML = '';
@@ -684,7 +957,9 @@
   socket.on('phaseChanged', ({ phase, day }) => {
     hideAllScreens();
     if (nightInterval) { clearInterval(nightInterval); nightInterval = null; }
-    if (phase === 'roles') { showScreen(waitScreen); roomLabel.textContent = roomId; }
+    // Закрываем галерею и раскрытую карточку при смене фазы
+    closeGallery();
+    if (phase === 'roles') { showScreen(waitScreen); roomLabel.textContent = roomId; rolesBtn.style.display = 'none'; }
     if (phase === 'night') { nightScreen.style.display = 'block'; nightDay.textContent = day; }
     if (phase === 'day') { dayScreen.style.display = 'block'; dayDay.textContent = day; }
   });
@@ -994,6 +1269,12 @@
   socket.on('gameOver', ({ winner }) => {
     alert(winner === 'mafia' ? 'Игра окончена: победила МАФИЯ!' : 'Игра окончена: победили МИРНЫЕ!');
   });
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+  }
 </script>
 </body>
 </html>
