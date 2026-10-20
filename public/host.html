@@ -256,6 +256,70 @@
     flex-shrink: 0;
   }
   .expanded-card .expanded-close:hover { background: var(--bg-3); }
+
+  /* Модалка конца игры */
+  #gameEndModal {
+    position: fixed; inset: 0;
+    background: rgba(15, 31, 74, 0.9);
+    display: none; align-items: center; justify-content: center;
+    padding: 20px; z-index: 300; overflow-y: auto;
+    backdrop-filter: blur(2px);
+  }
+  #gameEndModal.open { display: flex; animation: fadeIn 0.25s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes pop {
+    from { transform: scale(0.8); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+  .game-end-card {
+    background: var(--card);
+    border-radius: 18px;
+    width: 100%; max-width: 520px;
+    overflow: hidden;
+    border: 2px solid var(--accent);
+    color: var(--ink);
+    animation: pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    max-height: 92vh; display: flex; flex-direction: column;
+  }
+  .game-end-title {
+    background: var(--bg-2); color: #ffffff;
+    text-align: center; padding: 20px;
+    font-size: 22px; font-weight: 800; letter-spacing: 1px;
+  }
+  .game-end-sub {
+    text-align: center; padding: 12px 20px;
+    font-size: 14px; color: var(--ink-soft);
+    background: var(--card-2); border-bottom: 1px solid var(--line);
+  }
+  .game-end-roles {
+    list-style: none; padding: 12px 20px; margin: 0;
+    overflow-y: auto; flex: 1;
+  }
+  .game-end-roles li {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 14px; margin-bottom: 8px;
+    border-radius: 10px; gap: 8px;
+    background: var(--card-2); color: var(--ink);
+    border-left: 4px solid transparent;
+  }
+  .game-end-roles li.role-mafia, .game-end-roles li.role-don {
+    background: #fecaca; color: #7f1d1d; border-left-color: #7f1d1d;
+  }
+  .game-end-roles li.role-sheriff, .game-end-roles li.role-doctor,
+  .game-end-roles li.role-maniac, .game-end-roles li.role-beauty,
+  .game-end-roles li.role-journalist {
+    background: #bfdbfe; color: #1e3a8a; border-left-color: #1e3a8a;
+  }
+  .game-end-roles li.role-citizen {
+    background: #bbf7d0; color: #14532d; border-left-color: #14532d;
+  }
+  .game-end-roles li .role-tag { font-size: 12px; font-weight: 700; letter-spacing: 1px; }
+  .game-end-btn {
+    margin: 0 20px 20px;
+    width: calc(100% - 40px);
+    background: var(--bg-2);
+  }
+  .game-end-btn:hover { background: var(--bg-3); }
 </style>
 </head>
 <body>
@@ -395,6 +459,16 @@
     </div>
   </div>
 
+  <!-- Модалка конца игры -->
+  <div id="gameEndModal">
+    <div class="game-end-card">
+      <div class="game-end-title" id="gameEndTitle">—</div>
+      <div class="game-end-sub">Кто кем был в этой игре</div>
+      <ul class="game-end-roles" id="gameEndRoles"></ul>
+      <button class="game-end-btn" id="gameEndBtn">Создать новую игру</button>
+    </div>
+  </div>
+
 <script>
   const socket = io();
   const ROLES = window.ROLE_INFO;
@@ -457,6 +531,11 @@
   const expandedDesc = document.getElementById('expandedDesc');
   const expandedFeatures = document.getElementById('expandedFeatures');
   const expandedCloseBtn = document.getElementById('expandedCloseBtn');
+
+  const gameEndModal = document.getElementById('gameEndModal');
+  const gameEndTitle = document.getElementById('gameEndTitle');
+  const gameEndRoles = document.getElementById('gameEndRoles');
+  const gameEndBtn = document.getElementById('gameEndBtn');
 
   let roomId = null;
   let hostToken = null;
@@ -979,10 +1058,59 @@
     dayResults.appendChild(li);
   });
 
-  socket.on('gameOver', ({ winner }) => {
-    if (winner === 'manual') alert('Игра завершена ведущим');
-    else if (winner === 'mafia') alert('Игра окончена: победила МАФИЯ!');
-    else alert('Игра окончена: победили МИРНЫЕ!');
+  // ---- Конец игры ----
+  socket.on('gameEnded', ({ winner, roles }) => {
+    if (winner === 'manual') gameEndTitle.textContent = 'Игра завершена ведущим';
+    else if (winner === 'mafia') gameEndTitle.textContent = 'Победила МАФИЯ';
+    else gameEndTitle.textContent = 'Победили МИРНЫЕ';
+
+    gameEndRoles.innerHTML = '';
+    const order = { mafia: 0, don: 1, sheriff: 2, doctor: 3, maniac: 4, beauty: 5, journalist: 6, citizen: 7 };
+    roles.slice().sort((a, b) => (order[a.role] ?? 99) - (order[b.role] ?? 99)).forEach(p => {
+      const li = document.createElement('li');
+      li.className = 'role-' + p.role;
+      const left = document.createElement('span');
+      left.textContent = p.name + (p.alive ? '' : ' (погиб)');
+      const right = document.createElement('span');
+      right.className = 'role-tag';
+      right.textContent = roleLabel(p.role);
+      li.appendChild(left);
+      li.appendChild(right);
+      gameEndRoles.appendChild(li);
+    });
+
+    gameEndModal.classList.add('open');
+  });
+
+  gameEndBtn.addEventListener('click', () => {
+    gameEndModal.classList.remove('open');
+    // Возврат на экран создания комнаты
+    localStorage.removeItem('mafia_host');
+    roomId = null;
+    hostToken = null;
+    gameArea.style.display = 'none';
+    setupEl.style.display = 'block';
+    createBtn.disabled = false;
+    statusEl.textContent = '';
+    // Очистить блоки
+    lobbyList.style.display = 'block';
+    gameList.style.display = 'none';
+    startBtn.disabled = true;
+    startHint.textContent = 'Минимум 4 игрока';
+    nightControls.style.display = 'none';
+    dayLog.style.display = 'none';
+    nightLog.style.display = 'none';
+    nightResultsBox.style.display = 'none';
+    dayResultsBox.style.display = 'none';
+    rolesBtn.style.display = 'none';
+    playerList.innerHTML = '';
+    playerCount.textContent = '0';
+    emptyHint.style.display = 'block';
+    hintsInfo.style.display = 'none';
+    currentHintsTotal = 0;
+    currentHintsUsed = 0;
+    alivePlayers = [];
+    closeGallery();
   });
 
   function renderGroup(ul, players) {
