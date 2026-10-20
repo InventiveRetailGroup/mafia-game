@@ -96,6 +96,8 @@
     box-shadow: 0 10px 40px rgba(0,0,0,0.6);
     border: 2px solid var(--accent);
     animation: pop 0.2s ease-out;
+    display: flex; flex-direction: column;
+    max-height: 92vh;
   }
   @keyframes pop {
     from { transform: scale(0.94); opacity: 0; }
@@ -104,6 +106,7 @@
   .role-top {
     padding: 18px 20px; background: var(--bg-2);
     color: #ffffff; text-align: center;
+    flex-shrink: 0;
   }
   .role-label { font-size: 12px; letter-spacing: 3px; opacity: 0.85; }
   .role-title {
@@ -117,15 +120,23 @@
   .role-title.unknown { color: #e0e7ff; }
 
   .role-portrait {
-    height: 320px;
+    height: auto;
+    max-height: 50vh;
+    min-height: 200px;
     background: linear-gradient(180deg, #dbeafe, #bfdbfe);
     display: flex; align-items: center; justify-content: center;
     border-top: 1px solid var(--line);
     border-bottom: 1px solid var(--line);
     overflow: hidden;
+    flex-shrink: 0;
   }
   .role-portrait img {
-    width: 100%; height: 100%; object-fit: cover; display: block;
+    max-width: 100%;
+    max-height: 50vh;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
   }
   .role-portrait .placeholder {
     font-size: 20px; color: var(--ink-soft);
@@ -134,6 +145,7 @@
   .role-desc {
     padding: 18px 22px 22px; color: var(--ink);
     font-size: 15px; line-height: 1.55; text-align: center;
+    overflow-y: auto; flex: 1;
   }
   .role-desc b { color: var(--accent); }
   .role-section {
@@ -156,6 +168,7 @@
   .modal-close {
     margin: 0 20px 20px; background: var(--bg-2);
     width: calc(100% - 40px);
+    flex-shrink: 0;
   }
   .modal-close:hover { background: var(--bg-3); }
 
@@ -197,7 +210,15 @@
   }
   ul.targets li.target:hover { background: #eff6ff; border-color: var(--accent); }
   ul.targets li.target.selected { background: #93c5fd; border-color: var(--accent); }
-  ul.targets li.target.dead { opacity: 0.45; text-decoration: line-through; cursor: default; }
+  ul.targets li.target.dead {
+    opacity: 0.55;
+    background: #94a3b8;
+    color: #ffffff;
+    text-decoration: none;
+    cursor: default;
+    border-color: #64748b;
+  }
+  ul.targets li.target.dead:hover { background: #94a3b8; border-color: #64748b; }
   ul.targets li.target.immune { border-color: #fbcfe8; background: #fce7f3; }
   .vote-dots {
     display: inline-flex; gap: 3px; margin-left: 8px;
@@ -259,7 +280,6 @@
     font-weight: 800; font-size: 18px; color: #b91c1c;
   }
 
-  /* Кнопка "Роли в игре" */
   #rolesBtn {
     width: auto;
     padding: 10px 20px;
@@ -270,7 +290,6 @@
   }
   #rolesBtn:hover:not(:disabled) { background: var(--bg-3); }
 
-  /* Галерея ролей */
   #rolesGalleryModal {
     position: fixed; inset: 0;
     background: rgba(15, 31, 74, 0.92);
@@ -337,7 +356,6 @@
     font-size: 13px;
   }
 
-  /* Раскрытая карточка роли */
   #roleExpandedModal {
     position: fixed; inset: 0;
     background: rgba(15, 31, 74, 0.96);
@@ -371,17 +389,29 @@
     font-size: 24px;
     font-weight: 800;
     letter-spacing: 2px;
+    flex-shrink: 0;
   }
   .expanded-card .expanded-image {
-    height: 340px;
+    height: auto;
+    max-height: 50vh;
+    min-height: 200px;
     background: linear-gradient(180deg, #dbeafe, #bfdbfe);
     border-top: 1px solid var(--line);
     border-bottom: 1px solid var(--line);
     overflow: hidden;
     flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
   }
   .expanded-card .expanded-image img {
-    width: 100%; height: 100%; object-fit: cover; display: block;
+    max-width: 100%;
+    max-height: 50vh;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
+  }
+  .expanded-card .expanded-image .placeholder {
+    color: var(--ink-soft); font-size: 16px; text-align: center; padding: 20px;
   }
   .expanded-card .expanded-body {
     padding: 18px 22px;
@@ -412,6 +442,7 @@
     margin: 0 20px 20px;
     background: var(--bg-2);
     padding: 14px;
+    flex-shrink: 0;
   }
   .expanded-card .expanded-close:hover { background: var(--bg-3); }
 </style>
@@ -559,7 +590,6 @@
     </div>
   </div>
 
-  <!-- Галерея ролей -->
   <div id="rolesGalleryModal">
     <div class="gallery-header">
       <h2>Роли в игре</h2>
@@ -568,7 +598,6 @@
     <div class="gallery-grid" id="galleryGrid"></div>
   </div>
 
-  <!-- Раскрытая карточка -->
   <div id="roleExpandedModal">
     <div class="expanded-card">
       <div class="expanded-title" id="expandedTitle">—</div>
@@ -586,6 +615,7 @@
 
 <script>
   const socket = io();
+  const ROLES = window.ROLE_INFO;
 
   const joinScreen = document.getElementById('joinScreen');
   const waitScreen = document.getElementById('waitScreen');
@@ -669,9 +699,6 @@
   let myVote = null;
   let donMode = 'kill';
 
-  // ROLES берём из roles.js (window.ROLE_INFO)
-  const ROLES = window.ROLE_INFO;
-
   function showScreen(el) {
     [joinScreen, waitScreen].forEach(s => s.style.display = 'none');
     if (el) el.style.display = 'block';
@@ -696,7 +723,6 @@
     }
   }
 
-  // ---- Галерея ролей ----
   function buildGallery() {
     galleryGrid.innerHTML = '';
     const order = ['citizen', 'mafia', 'don', 'sheriff', 'doctor', 'maniac', 'beauty', 'journalist', 'unknown'];
@@ -714,23 +740,15 @@
       const imageBox = document.createElement('div');
       imageBox.className = 'gallery-card-image';
       const img = new Image();
-      img.onload = () => {
-        imageBox.innerHTML = '';
-        imageBox.appendChild(img);
-      };
-      img.onerror = () => {
-        imageBox.innerHTML = '<div class="placeholder">изображение отсутствует</div>';
-      };
+      img.onload = () => { imageBox.innerHTML = ''; imageBox.appendChild(img); };
+      img.onerror = () => { imageBox.innerHTML = '<div class="placeholder">изображение отсутствует</div>'; };
       img.src = `/images/${info.image}.jpg`;
       card.appendChild(imageBox);
 
       const btn = document.createElement('button');
       btn.className = 'gallery-card-btn';
       btn.textContent = 'Подробнее';
-      btn.onclick = (e) => {
-        e.stopPropagation();
-        openExpanded(role);
-      };
+      btn.onclick = (e) => { e.stopPropagation(); openExpanded(role); };
       card.appendChild(btn);
 
       galleryGrid.appendChild(card);
@@ -830,7 +848,6 @@
     roleTitle.className = 'role-title ' + role;
     setPortrait(rolePortrait, image, data.label);
 
-    // Описание + особенности
     roleDesc.innerHTML = '';
     const descBlock = document.createElement('div');
     descBlock.className = 'role-section';
@@ -957,11 +974,14 @@
   socket.on('phaseChanged', ({ phase, day }) => {
     hideAllScreens();
     if (nightInterval) { clearInterval(nightInterval); nightInterval = null; }
-    // Закрываем галерею и раскрытую карточку при смене фазы
     closeGallery();
     if (phase === 'roles') { showScreen(waitScreen); roomLabel.textContent = roomId; rolesBtn.style.display = 'none'; }
     if (phase === 'night') { nightScreen.style.display = 'block'; nightDay.textContent = day; }
     if (phase === 'day') { dayScreen.style.display = 'block'; dayDay.textContent = day; }
+    if (phase === 'ended') {
+      // экран завершения — можно показать простой экран ожидания
+      showScreen(waitScreen);
+    }
   });
 
   socket.on('nightState', (data) => {
@@ -1040,11 +1060,12 @@
       recruitsLeftBox.style.display = 'block';
       const left = data.recruitsLeft ?? 0;
       recruitsLeftBox.textContent = `Приглашений осталось: ${left}`;
-      if (left <= 0) {
-        modeInvite.disabled = true;
-        if (donMode === 'invite') { donMode = 'kill'; modeKill.classList.add('active'); modeInvite.classList.remove('active'); }
-      } else {
-        modeInvite.disabled = false;
+      const canInvite = data.canDonInvite && left > 0;
+      modeInvite.disabled = !canInvite;
+      if (!canInvite && donMode === 'invite') {
+        donMode = 'kill';
+        modeKill.classList.add('active');
+        modeInvite.classList.remove('active');
       }
     } else {
       donModeSwitch.style.display = 'none';
@@ -1175,6 +1196,13 @@
       return;
     }
 
+    if (data.firstDay) {
+      daySub.textContent = 'Первый день — знакомство. Голосования нет.';
+      dayActionArea.style.display = 'none';
+      dayDeadNote.style.display = 'none';
+      return;
+    }
+
     daySub.textContent = 'Обсуждайте и голосуйте. Клик по игроку — посмотреть карточку.';
     dayActionArea.style.display = 'block';
     dayDeadNote.style.display = 'none';
@@ -1199,6 +1227,7 @@
       const nameSpan = document.createElement('span');
       nameSpan.textContent = p.name;
       if (p.id === data.yourId) nameSpan.textContent += ' (вы)';
+      if (!p.alive) nameSpan.textContent += ' — Убит';
       if (immunity.includes(p.id)) nameSpan.textContent += ' (защищён)';
       if (revote && revote.includes(p.id)) nameSpan.textContent += ' — кандидат';
       li.appendChild(nameSpan);
@@ -1259,15 +1288,21 @@
     alert('Ничья! Переголосование между: ' + candidates.map(c => c.name).join(', '));
   });
 
-  socket.on('dayResults', ({ day, lynched, tie }) => {
+  socket.on('dayResults', ({ day, lynched, tie, firstDay }) => {
     dayActionArea.style.display = 'none';
+    if (firstDay) {
+      alert('Первый день завершён. Голосования не было.');
+      return;
+    }
     if (lynched) alert(`День ${day}. Казнён: ${lynched.name}`);
     else if (tie) alert(`День ${day}. Ничья — никто не казнён`);
     else alert(`День ${day}. Никто не казнён`);
   });
 
   socket.on('gameOver', ({ winner }) => {
-    alert(winner === 'mafia' ? 'Игра окончена: победила МАФИЯ!' : 'Игра окончена: победили МИРНЫЕ!');
+    if (winner === 'manual') alert('Игра завершена ведущим');
+    else if (winner === 'mafia') alert('Игра окончена: победила МАФИЯ!');
+    else alert('Игра окончена: победили МИРНЫЕ!');
   });
 
   function escapeHtml(s) {

@@ -82,8 +82,19 @@ const UNRECRUITABLE = ['sheriff', 'doctor', 'maniac', 'beauty', 'journalist'];
 
 function maxMafiaWithDon(n) {
   if (n <= 6) return 1;
-  if (n <= 9) return 2;
   return 2;
+}
+
+function aliveMafiaCount(game) {
+  return game.players.filter(p => p.alive && (p.role === 'mafia' || p.role === 'don')).length;
+}
+
+function currentMafiaLimit(game) {
+  return maxMafiaWithDon(game.players.length);
+}
+
+function canDonInvite(game) {
+  return game.recruitsLeft > 0 && aliveMafiaCount(game) < currentMafiaLimit(game);
 }
 
 // ---- Раздача ролей ----
@@ -103,12 +114,10 @@ function assignRoles(players) {
   fixed.forEach(p => { fixedCounts[p.role] = (fixedCounts[p.role] || 0) + 1; });
 
   const hasDon = fixedCounts.don > 0;
-  const targetMafia = hasDon
-    ? Math.min(maxMafiaWithDon(n), mafiaCount)
-    : mafiaCount;
 
+  // Если есть дон — мафии не раздаются автоматически
   const need = {
-    mafia: Math.max(0, targetMafia - fixedCounts.mafia),
+    mafia: hasDon ? 0 : Math.max(0, mafiaCount - fixedCounts.mafia),
     sheriff: Math.max(0, 1 - fixedCounts.sheriff),
     doctor: Math.max(0, 1 - fixedCounts.doctor),
     citizen: 0
@@ -256,6 +265,7 @@ function broadcastNightState(roomId) {
       myMafiaAction,
       mafiaVotes: getMafiaVotes(game),
       recruitsLeft: game.recruitsLeft,
+      canDonInvite: (p.role === 'don') ? canDonInvite(game) : false,
       donFeedback: (p.role === 'don') ? game.night.donInviteFeedback : null
     });
   });
@@ -313,7 +323,9 @@ function handleNightAction(roomId, playerId, payload) {
       if (player.role !== 'don') {
         return { ok: false, error: 'Приглашать может только Дон' };
       }
-      if (game.recruitsLeft <= 0) return { ok: false, error: 'Больше нельзя приглашать' };
+      if (!canDonInvite(game)) {
+        return { ok: false, error: 'Достигнут лимит мафий или приглашений' };
+      }
       if (target.role === 'mafia' || target.role === 'don') {
         return { ok: false, error: 'Этот игрок уже мафия' };
       }
@@ -610,6 +622,7 @@ function finishNight(roomId) {
   game.votes = {};
   game.nightImmunity = [];
   game.revoteCandidates = null;
+  game.firstDay = false;
 
   if (game.night.actions.beauty) {
     const bAlive = game.players.filter(p => p.alive && p.role === 'beauty');
@@ -641,6 +654,7 @@ function broadcastDayState(roomId) {
       alive: p.alive,
       yourRole: p.role,
       yourId: p.id,
+      firstDay: !!game.firstDay,
       players: playersForPlayers,
       votes: game.votes || {},
       immunity: game.nightImmunity || [],
@@ -651,6 +665,7 @@ function broadcastDayState(roomId) {
 
   io.to(game.hostSocketId).emit('hostDayState', {
     day: game.day,
+    firstDay: !!game.firstDay,
     players: game.players.map(p => ({
       id: p.id, name: p.name, role: p.role, alive: p.alive, connected: !!p.socketId
     })),
@@ -660,52 +675,6 @@ function broadcastDayState(roomId) {
     hintsTotal: game.hintsTotal || 0,
     hintsUsed: game.hintsUsed || 0
   });
-}
-
-// ---------- Подсказки ----------
-function generateHint(game, targetPlayerId) {
-  // targetPlayerId — тот, кому показывается подсказка
-  // Сама подсказка: 2 или 3 случайных живых игроков (не targetPlayerId)
-  const alive = game.players.filter(p => p.alive && p.id !== targetPlayerId);
-  if (alive.length === 0) return null;
-
-  const howMany = Math.min(alive.length, Math.random() < 0.5 ? 2 : 3);
-  const shuffled = alive.slice();
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  const picked = shuffled.slice(0, howMany);
-
-  const total = game.hintsTotal;
-  const used = game.hintsUsed;        // сколько уже было до этой
-  const current = used + 1;           // эта подсказка
-  const progress = total > 0 ? current / total : 1; // 0..1
-
-  const mafiaBase = 5 + 85 * progress;    // 5..90
-  const peacefulBase = 5 + 45 * progress; // 5..50
-
-  const entries = picked.map(p => {
-    const isMafiaTeam = (p.role === 'mafia' || p.role === 'don');
-    let percent;
-    if (isMafiaTeam) {
-      percent = Math.round(mafiaBase + (Math.random() * 6 - 3)); // ±3
-      percent = Math.max(0, Math.min(100, percent));
-    } else {
-      percent = Math.round(peacefulBase + (Math.random() * 6 - 3));
-      percent = Math.max(0, Math.min(50, percent));
-    }
-    return { id: p.id, name: p.name, percent };
-  });
-
-  // Сортируем по убыванию — мафия будет выше
-  entries.sort((a, b) => b.percent - a.percent);
-
-  return {
-    current,
-    total,
-    players: entries
-  };
 }
 
 // ---------- Socket.IO ----------
@@ -721,6 +690,7 @@ io.on('connection', (socket) => {
       players: [],
       phase: 'lobby',
       day: 0,
+      firstDay: true,
       votes: {},
       nightImmunity: [],
       recruitsLeft: MAX_DON_RECRUITS,
@@ -848,8 +818,10 @@ io.on('connection', (socket) => {
     const result = assignRoles(game.players);
     if (!result) return callback?.({ ok: false, error: 'Не удалось раздать роли' });
 
-    game.phase = 'roles';
+    // Игра начинается с дня (день 0, без голосования)
+    game.phase = 'day';
     game.day = 0;
+    game.firstDay = true;
     game.recruitsLeft = MAX_DON_RECRUITS;
     game.nightImmunity = [];
     game.lastBeautyTarget = null;
@@ -867,30 +839,48 @@ io.on('connection', (socket) => {
           name: p.name,
           image: findImage(p.role)
         });
-        io.to(p.socketId).emit('phaseChanged', { phase: 'roles', day: 0 });
+        io.to(p.socketId).emit('phaseChanged', { phase: 'day', day: 0 });
       }
     });
 
     io.to(game.hostSocketId).emit('gameState', {
       roomId,
-      phase: 'roles',
+      phase: 'day',
       day: 0,
+      firstDay: true,
       mafiaCount: result.mafiaCount,
       players: game.players.map(p => ({
         id: p.id, name: p.name, alive: p.alive, connected: !!p.socketId, role: p.role
       }))
     });
+    io.to(game.hostSocketId).emit('phaseChanged', { phase: 'day', day: 0 });
 
+    broadcastDayState(roomId);
     callback?.({ ok: true });
   });
 
   socket.on('startNight', ({ roomId }, callback) => {
     const game = games[roomId];
     if (!game || game.hostSocketId !== socket.id) return callback?.({ ok: false, error: 'Нет доступа' });
-    if (game.phase !== 'roles' && game.phase !== 'day') {
+    if (game.phase !== 'day' && game.phase !== 'roles') {
       return callback?.({ ok: false, error: 'Сейчас нельзя начать ночь' });
     }
     beginNight(roomId);
+    callback?.({ ok: true });
+  });
+
+  socket.on('endGame', ({ roomId }, callback) => {
+    const game = games[roomId];
+    if (!game || game.hostSocketId !== socket.id) return callback?.({ ok: false, error: 'Нет доступа' });
+    if (game.night && game.night.timerHandle) {
+      clearTimeout(game.night.timerHandle);
+      game.night.timerHandle = null;
+    }
+    game.phase = 'ended';
+    io.to(game.hostSocketId).emit('gameOver', { winner: 'manual' });
+    game.players.forEach(p => p.socketId && io.to(p.socketId).emit('gameOver', { winner: 'manual' }));
+    io.to(game.hostSocketId).emit('phaseChanged', { phase: 'ended', day: game.day });
+    game.players.forEach(p => p.socketId && io.to(p.socketId).emit('phaseChanged', { phase: 'ended', day: game.day }));
     callback?.({ ok: true });
   });
 
@@ -927,7 +917,7 @@ io.on('connection', (socket) => {
     callback?.({ ok: true });
   });
 
-  // ---- Подсказки: ведущий задаёт общее число ----
+  // ---- Подсказки ----
   socket.on('setHintsTotal', ({ roomId, total }, callback) => {
     const game = games[roomId];
     if (!game || game.hostSocketId !== socket.id) return callback?.({ ok: false, error: 'Нет доступа' });
@@ -942,11 +932,11 @@ io.on('connection', (socket) => {
     callback?.({ ok: true, total });
   });
 
-  // ---- Подсказки: ведущий выбирает игрока ----
   socket.on('giveHint', ({ roomId, playerId }, callback) => {
     const game = games[roomId];
     if (!game || game.hostSocketId !== socket.id) return callback?.({ ok: false, error: 'Нет доступа' });
     if (game.phase !== 'day') return callback?.({ ok: false, error: 'Подсказки доступны только днём' });
+    if (game.firstDay) return callback?.({ ok: false, error: 'В первый день подсказки недоступны' });
     if (!game.hintsTotal) return callback?.({ ok: false, error: 'Сначала задайте число подсказок' });
     if (game.hintsUsed >= game.hintsTotal) {
       return callback?.({ ok: false, error: 'Подсказки закончились' });
@@ -970,6 +960,7 @@ io.on('connection', (socket) => {
   socket.on('dayVote', ({ roomId, targetId }, callback) => {
     const game = games[roomId];
     if (!game || game.phase !== 'day') return callback?.({ ok: false, error: 'Не день' });
+    if (game.firstDay) return callback?.({ ok: false, error: 'В первый день голосования нет' });
     const voter = game.players.find(p => p.id === socket.data.playerId);
     if (!voter || !voter.alive) return callback?.({ ok: false, error: 'Вы не можете голосовать' });
 
@@ -995,6 +986,18 @@ io.on('connection', (socket) => {
     const game = games[roomId];
     if (!game || game.hostSocketId !== socket.id) return callback?.({ ok: false, error: 'Нет доступа' });
     if (game.phase !== 'day') return callback?.({ ok: false, error: 'Не день' });
+
+    if (game.firstDay) {
+      game.phase = 'roles';
+      io.to(game.hostSocketId).emit('dayResults', { day: 0, lynched: null, tie: false, firstDay: true });
+      game.players.forEach(p => {
+        if (!p.socketId) return;
+        io.to(p.socketId).emit('dayResults', { day: 0, lynched: null, tie: false, firstDay: true });
+        io.to(p.socketId).emit('phaseChanged', { phase: 'roles', day: 0 });
+      });
+      io.to(game.hostSocketId).emit('phaseChanged', { phase: 'roles', day: 0 });
+      return callback?.({ ok: true, firstDay: true });
+    }
 
     const counts = {};
     Object.values(game.votes || {}).forEach(tid => {
@@ -1093,15 +1096,55 @@ io.on('connection', (socket) => {
   });
 });
 
+function generateHint(game, targetPlayerId) {
+  const alive = game.players.filter(p => p.alive && p.id !== targetPlayerId);
+  if (alive.length === 0) return null;
+
+  const howMany = Math.min(alive.length, Math.random() < 0.5 ? 2 : 3);
+  const shuffled = alive.slice();
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  const picked = shuffled.slice(0, howMany);
+
+  const total = game.hintsTotal;
+  const used = game.hintsUsed;
+  const current = used + 1;
+  const progress = total > 0 ? current / total : 1;
+
+  const mafiaBase = 5 + 85 * progress;
+  const peacefulBase = 5 + 45 * progress;
+
+  const entries = picked.map(p => {
+    const isMafiaTeam = (p.role === 'mafia' || p.role === 'don');
+    let percent;
+    if (isMafiaTeam) {
+      percent = Math.round(mafiaBase + (Math.random() * 6 - 3));
+      percent = Math.max(0, Math.min(100, percent));
+    } else {
+      percent = Math.round(peacefulBase + (Math.random() * 6 - 3));
+      percent = Math.max(0, Math.min(50, percent));
+    }
+    return { id: p.id, name: p.name, percent };
+  });
+
+  entries.sort((a, b) => b.percent - a.percent);
+
+  return { current, total, players: entries };
+}
+
 function checkGameEnd(roomId) {
   const game = games[roomId];
   if (!game) return;
   const aliveMafia = game.players.filter(p => p.alive && (p.role === 'mafia' || p.role === 'don')).length;
   const aliveOthers = game.players.filter(p => p.alive && p.role !== 'mafia' && p.role !== 'don').length;
   if (aliveMafia === 0) {
+    game.phase = 'ended';
     io.to(game.hostSocketId).emit('gameOver', { winner: 'citizens' });
     game.players.forEach(p => p.socketId && io.to(p.socketId).emit('gameOver', { winner: 'citizens' }));
   } else if (aliveMafia >= aliveOthers) {
+    game.phase = 'ended';
     io.to(game.hostSocketId).emit('gameOver', { winner: 'mafia' });
     game.players.forEach(p => p.socketId && io.to(p.socketId).emit('gameOver', { winner: 'mafia' }));
   }

@@ -50,6 +50,8 @@
   button.finish:hover:not(:disabled) { background: #1d4ed8; }
   button.hint { background: #f59e0b; }
   button.hint:hover:not(:disabled) { background: #fbbf24; }
+  button.endgame { background: #7f1d1d; }
+  button.endgame:hover:not(:disabled) { background: #991b1b; }
   #qrBox {
     display: flex; justify-content: center; align-items: center;
     min-height: 260px; background: #fff; border-radius: 10px;
@@ -93,7 +95,6 @@
   }
   .left-name { display: flex; align-items: center; }
 
-  /* Модалка для подсказки */
   #hintModal, #hintTotalModal {
     position: fixed; inset: 0;
     background: rgba(15, 31, 74, 0.85);
@@ -128,14 +129,12 @@
   .hint-actions button { flex: 1; }
   .hint-actions button.cancel { background: #64748b; }
 
-  /* Кнопка "Роли в игре" */
   #rolesBtn {
     width: auto; padding: 10px 20px; font-size: 14px;
     background: var(--bg-2); margin-top: 12px; display: none;
   }
   #rolesBtn:hover:not(:disabled) { background: var(--bg-3); }
 
-  /* Галерея ролей */
   #rolesGalleryModal {
     position: fixed; inset: 0;
     background: rgba(15, 31, 74, 0.92);
@@ -192,7 +191,6 @@
     background: var(--accent); padding: 12px; font-size: 13px;
   }
 
-  /* Раскрытая карточка */
   #roleExpandedModal {
     position: fixed; inset: 0;
     background: rgba(15, 31, 74, 0.96);
@@ -215,16 +213,25 @@
     background: var(--bg-2); color: #ffffff;
     text-align: center; padding: 18px 20px;
     font-size: 24px; font-weight: 800; letter-spacing: 2px;
+    flex-shrink: 0;
   }
   .expanded-card .expanded-image {
-    height: 340px;
+    height: auto;
+    max-height: 50vh;
+    min-height: 200px;
     background: linear-gradient(180deg, #dbeafe, #bfdbfe);
     border-top: 1px solid var(--line);
     border-bottom: 1px solid var(--line);
     overflow: hidden; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
   }
   .expanded-card .expanded-image img {
-    width: 100%; height: 100%; object-fit: cover; display: block;
+    max-width: 100%;
+    max-height: 50vh;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
   }
   .expanded-card .expanded-image .placeholder {
     color: var(--ink-soft); font-size: 16px; text-align: center; padding: 20px;
@@ -246,6 +253,7 @@
   .expanded-card .expanded-close {
     width: calc(100% - 40px); margin: 0 20px 20px;
     background: var(--bg-2); padding: 14px;
+    flex-shrink: 0;
   }
   .expanded-card .expanded-close:hover { background: var(--bg-3); }
 </style>
@@ -279,6 +287,7 @@
         <button id="nightBtn" class="start">Начать ночь</button>
         <button id="finishDayBtn" class="finish" style="display:none; margin-left:8px;">Завершить день</button>
         <button id="hintBtn" class="hint" style="display:none; margin-left:8px;">Дать подсказку</button>
+        <button id="endGameBtn" class="endgame" style="display:none; margin-left:8px;">Завершить игру</button>
       </div>
       <div id="hintsInfo" class="muted" style="text-align:center; margin-top:8px; display:none;"></div>
     </div>
@@ -338,7 +347,6 @@
     </div>
   </div>
 
-  <!-- Модалка: ввод числа подсказок -->
   <div id="hintTotalModal">
     <div class="hint-card">
       <h2>Сколько всего подсказок в игре?</h2>
@@ -353,7 +361,6 @@
     </div>
   </div>
 
-  <!-- Модалка: выбор игрока для подсказки -->
   <div id="hintModal">
     <div class="hint-card">
       <h2>Кому дать подсказку?</h2>
@@ -365,7 +372,6 @@
     </div>
   </div>
 
-  <!-- Галерея ролей -->
   <div id="rolesGalleryModal">
     <div class="gallery-header">
       <h2>Роли в игре</h2>
@@ -374,7 +380,6 @@
     <div class="gallery-grid" id="galleryGrid"></div>
   </div>
 
-  <!-- Раскрытая карточка -->
   <div id="roleExpandedModal">
     <div class="expanded-card">
       <div class="expanded-title" id="expandedTitle">—</div>
@@ -415,6 +420,7 @@
   const nightBtn = document.getElementById('nightBtn');
   const finishDayBtn = document.getElementById('finishDayBtn');
   const hintBtn = document.getElementById('hintBtn');
+  const endGameBtn = document.getElementById('endGameBtn');
   const hintsInfo = document.getElementById('hintsInfo');
   const nightLog = document.getElementById('nightLog');
   const nightSteps = document.getElementById('nightSteps');
@@ -509,7 +515,13 @@
     });
   });
 
-  // ---- Подсказки ----
+  endGameBtn.addEventListener('click', () => {
+    if (!confirm('Завершить игру для всех?')) return;
+    socket.emit('endGame', { roomId }, (res) => {
+      if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
+    });
+  });
+
   hintBtn.addEventListener('click', () => {
     if (currentHintsTotal === 0) {
       hintTotalModal.classList.add('open');
@@ -600,7 +612,6 @@
     rolesBtn.style.display = 'inline-block';
   }
 
-  // ---- Галерея ролей ----
   function buildGallery() {
     galleryGrid.innerHTML = '';
     const order = ['citizen', 'mafia', 'don', 'sheriff', 'doctor', 'maniac', 'beauty', 'journalist', 'unknown'];
@@ -753,6 +764,10 @@
     if (phase === 'roles' || phase === 'night' || phase === 'day') {
       rolesBtn.style.display = 'none';
       closeGallery();
+      endGameBtn.style.display = 'inline-block';
+    }
+    if (phase === 'ended') {
+      endGameBtn.style.display = 'none';
     }
     if (phase === 'roles') {
       nightControls.style.display = 'block';
@@ -866,7 +881,12 @@
     alivePlayers = state.players.filter(p => p.alive);
 
     const votes = state.votes || {};
-    if (Object.keys(votes).length === 0) {
+    if (state.firstDay) {
+      const li = document.createElement('li');
+      li.className = 'muted';
+      li.textContent = 'Первый день — без голосования';
+      dayVotesList.appendChild(li);
+    } else if (Object.keys(votes).length === 0) {
       const li = document.createElement('li');
       li.className = 'muted';
       li.textContent = 'Пока никто не голосовал';
@@ -943,7 +963,10 @@
     dayResultsBox.style.display = 'block';
     dayResults.innerHTML = '';
     const li = document.createElement('li');
-    if (res.lynched) {
+    if (res.firstDay) {
+      li.className = 'player';
+      li.textContent = 'Первый день завершён без голосования';
+    } else if (res.lynched) {
       li.className = 'player role-mafia';
       li.textContent = `Казнён: ${res.lynched.name}`;
     } else if (res.tie) {
@@ -957,7 +980,9 @@
   });
 
   socket.on('gameOver', ({ winner }) => {
-    alert(winner === 'mafia' ? 'Игра окончена: победила МАФИЯ!' : 'Игра окончена: победили МИРНЫЕ!');
+    if (winner === 'manual') alert('Игра завершена ведущим');
+    else if (winner === 'mafia') alert('Игра окончена: победила МАФИЯ!');
+    else alert('Игра окончена: победили МИРНЫЕ!');
   });
 
   function renderGroup(ul, players) {
