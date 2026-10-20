@@ -115,7 +115,6 @@ function assignRoles(players) {
 
   const hasDon = fixedCounts.don > 0;
 
-  // Если есть дон — мафии не раздаются автоматически
   const need = {
     mafia: hasDon ? 0 : Math.max(0, mafiaCount - fixedCounts.mafia),
     sheriff: Math.max(0, 1 - fixedCounts.sheriff),
@@ -677,6 +676,38 @@ function broadcastDayState(roomId) {
   });
 }
 
+// ---------- Конец игры ----------
+function endGameAndBroadcast(roomId, winner) {
+  const game = games[roomId];
+  if (!game) return;
+
+  if (game.night && game.night.timerHandle) {
+    clearTimeout(game.night.timerHandle);
+    game.night.timerHandle = null;
+  }
+
+  // Полный список ролей всем
+  const rolesList = game.players.map(p => ({
+    id: p.id,
+    name: p.name,
+    role: p.role,
+    alive: p.alive
+  }));
+
+  const payload = {
+    winner,        // 'mafia' | 'citizens' | 'manual'
+    roles: rolesList
+  };
+
+  io.to(game.hostSocketId).emit('gameEnded', payload);
+  game.players.forEach(p => {
+    if (p.socketId) io.to(p.socketId).emit('gameEnded', payload);
+  });
+
+  // Удаляем комнату — игра окончена
+  delete games[roomId];
+}
+
 // ---------- Socket.IO ----------
 io.on('connection', (socket) => {
   console.log('Подключился socket:', socket.id);
@@ -742,8 +773,9 @@ io.on('connection', (socket) => {
         socket.data.roomId = roomId;
         socket.data.playerId = existing.id;
         callback({ ok: true, playerId: existing.id, playerToken: existing.token, reconnected: true });
+        // НЕ открываем карточку автоматически — только восстанавливаем кнопку
         if (existing.role) {
-          io.to(socket.id).emit('yourRole', {
+          io.to(socket.id).emit('roleReconnect', {
             role: existing.role,
             name: existing.name,
             image: findImage(existing.role)
@@ -818,7 +850,6 @@ io.on('connection', (socket) => {
     const result = assignRoles(game.players);
     if (!result) return callback?.({ ok: false, error: 'Не удалось раздать роли' });
 
-    // Игра начинается с дня (день 0, без голосования)
     game.phase = 'day';
     game.day = 0;
     game.firstDay = true;
@@ -872,15 +903,7 @@ io.on('connection', (socket) => {
   socket.on('endGame', ({ roomId }, callback) => {
     const game = games[roomId];
     if (!game || game.hostSocketId !== socket.id) return callback?.({ ok: false, error: 'Нет доступа' });
-    if (game.night && game.night.timerHandle) {
-      clearTimeout(game.night.timerHandle);
-      game.night.timerHandle = null;
-    }
-    game.phase = 'ended';
-    io.to(game.hostSocketId).emit('gameOver', { winner: 'manual' });
-    game.players.forEach(p => p.socketId && io.to(p.socketId).emit('gameOver', { winner: 'manual' }));
-    io.to(game.hostSocketId).emit('phaseChanged', { phase: 'ended', day: game.day });
-    game.players.forEach(p => p.socketId && io.to(p.socketId).emit('phaseChanged', { phase: 'ended', day: game.day }));
+    endGameAndBroadcast(roomId, 'manual');
     callback?.({ ok: true });
   });
 
@@ -917,7 +940,6 @@ io.on('connection', (socket) => {
     callback?.({ ok: true });
   });
 
-  // ---- Подсказки ----
   socket.on('setHintsTotal', ({ roomId, total }, callback) => {
     const game = games[roomId];
     if (!game || game.hostSocketId !== socket.id) return callback?.({ ok: false, error: 'Нет доступа' });
@@ -1140,13 +1162,9 @@ function checkGameEnd(roomId) {
   const aliveMafia = game.players.filter(p => p.alive && (p.role === 'mafia' || p.role === 'don')).length;
   const aliveOthers = game.players.filter(p => p.alive && p.role !== 'mafia' && p.role !== 'don').length;
   if (aliveMafia === 0) {
-    game.phase = 'ended';
-    io.to(game.hostSocketId).emit('gameOver', { winner: 'citizens' });
-    game.players.forEach(p => p.socketId && io.to(p.socketId).emit('gameOver', { winner: 'citizens' }));
+    endGameAndBroadcast(roomId, 'citizens');
   } else if (aliveMafia >= aliveOthers) {
-    game.phase = 'ended';
-    io.to(game.hostSocketId).emit('gameOver', { winner: 'mafia' });
-    game.players.forEach(p => p.socketId && io.to(p.socketId).emit('gameOver', { winner: 'mafia' }));
+    endGameAndBroadcast(roomId, 'mafia');
   }
 }
 
