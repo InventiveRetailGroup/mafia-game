@@ -24,6 +24,7 @@
     margin: 0; padding: 0; min-height: 100vh;
     font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
     background: var(--bg); color: var(--ink);
+    overflow-x: hidden;
   }
   body {
     padding: 20px;
@@ -36,6 +37,11 @@
     padding: 26px; width: 100%; max-width: 420px;
     box-shadow: 0 6px 24px rgba(0,0,0,0.4);
     border: 1px solid var(--line);
+    animation: fadeInUp 0.4s ease-out;
+  }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
   }
   h1 { font-size: 24px; margin: 0 0 8px; text-align: center; letter-spacing: 1px; color: var(--ink); }
   .sub { text-align: center; color: var(--ink-soft); font-size: 14px; margin-bottom: 22px; }
@@ -45,9 +51,12 @@
     background: #fff; color: var(--ink);
     border: 1px solid var(--line); border-radius: 10px;
     margin-bottom: 16px; outline: none; font-family: inherit;
-    transition: border-color 0.15s;
+    transition: border-color 0.2s, box-shadow 0.2s;
   }
-  input:focus { border-color: var(--accent); }
+  input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  }
   input.code {
     text-transform: uppercase; letter-spacing: 4px;
     text-align: center; font-weight: 700; font-size: 20px;
@@ -56,10 +65,22 @@
   button {
     width: 100%; background: var(--accent); color: #fff;
     border: none; padding: 16px; font-size: 16px; font-weight: 600;
-    border-radius: 10px; cursor: pointer; transition: 0.15s;
+    border-radius: 10px; cursor: pointer;
     font-family: inherit; letter-spacing: 1px;
+    transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+    position: relative;
+    overflow: hidden;
   }
-  button:hover:not(:disabled) { background: var(--accent-2); }
+  button::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(circle at center, rgba(255,255,255,0.35), transparent 60%);
+    opacity: 0; transition: opacity 0.25s;
+    pointer-events: none;
+  }
+  button:hover:not(:disabled) { background: var(--accent-2); box-shadow: 0 4px 16px rgba(37,99,235,0.4); }
+  button:hover:not(:disabled)::after { opacity: 1; }
+  button:active:not(:disabled) { transform: scale(0.97); }
   button:disabled { background: #94a3b8; cursor: not-allowed; }
   .error { color: #b91c1c; font-size: 14px; text-align: center; margin-top: 12px; min-height: 20px; }
   .status { text-align: center; font-size: 15px; color: var(--ink-soft); }
@@ -80,37 +101,69 @@
     box-shadow: 0 4px 12px rgba(0,0,0,0.35);
     z-index: 50; cursor: pointer;
     font-weight: 700;
+    transition: transform 0.15s, box-shadow 0.2s, background 0.2s;
+    animation: fadeInScale 0.3s ease-out;
   }
+  #roleBtn:hover { transform: scale(1.06); box-shadow: 0 6px 20px rgba(37,99,235,0.45); }
+  #roleBtn:active { transform: scale(0.95); }
   #roleBtn::after { content: 'Р'; font-size: 24px; color: var(--accent); }
+
+  @keyframes fadeInScale {
+    from { opacity: 0; transform: scale(0.6); }
+    to { opacity: 1; transform: scale(1); }
+  }
 
   #roleModal, #resultModal, #peekModal, #inviteModal, #hintResultModal {
     position: fixed; inset: 0;
     background: rgba(15, 31, 74, 0.85);
     display: none; align-items: center; justify-content: center;
     padding: 20px; z-index: 100; overflow-y: auto;
+    backdrop-filter: blur(2px);
   }
-  #roleModal.open, #resultModal.open, #peekModal.open, #inviteModal.open, #hintResultModal.open { display: flex; }
+  #roleModal.open, #resultModal.open, #peekModal.open, #inviteModal.open, #hintResultModal.open {
+    display: flex;
+    animation: fadeIn 0.2s ease-out;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
   .role-card {
     background: var(--card); border-radius: 18px;
     width: 100%; max-width: 420px; overflow: hidden;
     box-shadow: 0 10px 40px rgba(0,0,0,0.6);
     border: 2px solid var(--accent);
-    animation: pop 0.2s ease-out;
+    animation: pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     display: flex; flex-direction: column;
     max-height: 92vh;
   }
   @keyframes pop {
-    from { transform: scale(0.94); opacity: 0; }
+    from { transform: scale(0.8); opacity: 0; }
     to { transform: scale(1); opacity: 1; }
   }
   .role-top {
     padding: 18px 20px; background: var(--bg-2);
     color: #ffffff; text-align: center;
     flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
   }
-  .role-label { font-size: 12px; letter-spacing: 3px; opacity: 0.85; }
+  .role-top::before {
+    content: '';
+    position: absolute;
+    top: -50%; left: -50%;
+    width: 200%; height: 200%;
+    background: linear-gradient(45deg, transparent, rgba(255,255,255,0.08), transparent);
+    animation: shimmer 3s infinite;
+  }
+  @keyframes shimmer {
+    0% { transform: translateX(-100%) rotate(45deg); }
+    100% { transform: translateX(100%) rotate(45deg); }
+  }
+  .role-label { font-size: 12px; letter-spacing: 3px; opacity: 0.85; position: relative; }
   .role-title {
     font-size: 28px; font-weight: 800; margin-top: 4px; letter-spacing: 2px;
+    position: relative;
   }
   .role-title.mafia, .role-title.don, .role-title.maniac { color: #fca5a5; }
   .role-title.sheriff, .role-title.journalist { color: #bfdbfe; }
@@ -137,6 +190,7 @@
     height: auto;
     object-fit: contain;
     display: block;
+    animation: fadeIn 0.35s ease-out;
   }
   .role-portrait .placeholder {
     font-size: 20px; color: var(--ink-soft);
@@ -156,7 +210,9 @@
     border-radius: 10px;
     font-size: 14px;
     line-height: 1.5;
+    animation: fadeInUp 0.4s ease-out backwards;
   }
+  .role-section:nth-child(2) { animation-delay: 0.1s; }
   .role-section .role-section-title {
     display: block;
     font-size: 12px;
@@ -169,35 +225,32 @@
     margin: 0 20px 20px; background: var(--bg-2);
     width: calc(100% - 40px);
     flex-shrink: 0;
+    transition: background 0.2s, transform 0.1s;
   }
   .modal-close:hover { background: var(--bg-3); }
+  .modal-close:active { transform: scale(0.97); }
 
-  #topBar {
-    position: fixed; top: 0; left: 0; right: 0;
-    padding: 12px 16px; background: var(--bg-2);
-    color: #ffffff; border-bottom: 1px solid var(--line);
-    display: none; justify-content: space-between; align-items: center;
-    font-size: 14px; z-index: 40;
-  }
-  .badge {
-    display: inline-block; padding: 4px 10px;
-    background: #bbf7d0; color: #14532d;
-    border-radius: 12px; font-size: 12px; font-weight: 700;
-  }
-  .badge.off { background: #fecaca; color: #7f1d1d; }
   #content {
     flex: 1; display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    width: 100%; padding-top: 60px;
+    width: 100%;
+    padding-top: 20px;
   }
 
   #nightScreen, #dayScreen {
-    display: none; width: 100%; max-width: 460px; padding-top: 60px;
+    display: none; width: 100%; max-width: 460px; padding-top: 20px;
+    animation: fadeInUp 0.4s ease-out;
   }
   #nightTimer {
     text-align: center; font-size: 34px; font-weight: 800;
     color: var(--accent); margin: 8px 0 16px;
     font-family: 'Courier New', monospace;
+    transition: color 0.2s;
+  }
+  #nightTimer.warn { color: #dc2626; animation: pulse 1s infinite; }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.08); }
   }
   ul.targets { list-style: none; padding: 0; margin: 0; }
   ul.targets li.target {
@@ -205,11 +258,26 @@
     background: var(--card-2); border: 2px solid var(--line);
     border-radius: 10px; cursor: pointer;
     display: flex; justify-content: space-between; align-items: center;
-    transition: 0.12s; gap: 8px;
+    gap: 8px;
     color: var(--ink);
+    transition: background 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
+    animation: fadeInUp 0.3s ease-out backwards;
   }
-  ul.targets li.target:hover { background: #eff6ff; border-color: var(--accent); }
-  ul.targets li.target.selected { background: #93c5fd; border-color: var(--accent); }
+  ul.targets li.target:nth-child(1) { animation-delay: 0.02s; }
+  ul.targets li.target:nth-child(2) { animation-delay: 0.04s; }
+  ul.targets li.target:nth-child(3) { animation-delay: 0.06s; }
+  ul.targets li.target:nth-child(4) { animation-delay: 0.08s; }
+  ul.targets li.target:nth-child(5) { animation-delay: 0.10s; }
+  ul.targets li.target:nth-child(6) { animation-delay: 0.12s; }
+  ul.targets li.target:nth-child(7) { animation-delay: 0.14s; }
+  ul.targets li.target:nth-child(8) { animation-delay: 0.16s; }
+  ul.targets li.target:hover { background: #eff6ff; border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,0.15); }
+  ul.targets li.target:active { transform: scale(0.98); }
+  ul.targets li.target.selected {
+    background: #93c5fd;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.2);
+  }
   ul.targets li.target.dead {
     opacity: 0.55;
     background: #94a3b8;
@@ -218,15 +286,20 @@
     cursor: default;
     border-color: #64748b;
   }
-  ul.targets li.target.dead:hover { background: #94a3b8; border-color: #64748b; }
+  ul.targets li.target.dead:hover { background: #94a3b8; border-color: #64748b; transform: none; box-shadow: none; }
   ul.targets li.target.immune { border-color: #fbcfe8; background: #fce7f3; }
   .vote-dots {
     display: inline-flex; gap: 3px; margin-left: 8px;
   }
   .vote-dots .d {
     width: 10px; height: 10px; border-radius: 50%; background: #dc2626;
+    animation: dotPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
   .vote-dots .d.invite { background: #16a34a; }
+  @keyframes dotPop {
+    from { transform: scale(0); }
+    to { transform: scale(1); }
+  }
   .tie-info {
     text-align: center; color: var(--ink-soft);
     font-size: 13px; margin-top: 8px;
@@ -248,7 +321,9 @@
   }
   .invite-actions button { padding: 14px; }
   .invite-actions button.accept { background: #16a34a; }
+  .invite-actions button.accept:hover { background: #22c55e; }
   .invite-actions button.reject { background: #dc2626; }
+  .invite-actions button.reject:hover { background: #ef4444; }
   .blocked-note {
     background: #fce7f3;
     border: 1px solid #fbcfe8;
@@ -258,6 +333,12 @@
     color: #831843;
     font-size: 14px;
     margin-bottom: 12px;
+    animation: shake 0.5s ease-out;
+  }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
   }
   .feedback-note {
     background: #fef3c7;
@@ -268,6 +349,7 @@
     color: #78350f;
     font-size: 14px;
     margin-bottom: 12px;
+    animation: fadeInUp 0.3s ease-out;
   }
   .hint-list { padding: 0 20px; }
   .hint-list li {
@@ -275,7 +357,11 @@
     padding: 12px 14px; margin-bottom: 8px;
     background: var(--card-2); border-radius: 10px;
     color: var(--ink);
+    animation: fadeInUp 0.3s ease-out backwards;
   }
+  .hint-list li:nth-child(1) { animation-delay: 0.05s; }
+  .hint-list li:nth-child(2) { animation-delay: 0.1s; }
+  .hint-list li:nth-child(3) { animation-delay: 0.15s; }
   .hint-percent {
     font-weight: 800; font-size: 18px; color: #b91c1c;
   }
@@ -297,19 +383,23 @@
     z-index: 150;
     padding: 24px 16px;
     overflow-y: auto;
+    backdrop-filter: blur(2px);
   }
-  #rolesGalleryModal.open { display: block; }
+  #rolesGalleryModal.open { display: block; animation: fadeIn 0.25s ease-out; }
   .gallery-header {
     max-width: 1100px; margin: 0 auto 20px;
     display: flex; justify-content: space-between; align-items: center;
     color: #ffffff;
+    animation: fadeInUp 0.3s ease-out;
   }
   .gallery-header h2 { margin: 0; font-size: 22px; }
   .gallery-close {
     width: auto; padding: 10px 18px;
     background: #dc2626; font-size: 14px;
+    transition: background 0.2s, transform 0.1s;
   }
   .gallery-close:hover { background: #ef4444; }
+  .gallery-close:active { transform: scale(0.96); }
   .gallery-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -324,9 +414,23 @@
     cursor: pointer;
     display: flex; flex-direction: column;
     color: var(--ink);
-    transition: transform 0.15s;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
+    animation: fadeInScale 0.3s ease-out backwards;
   }
-  .gallery-card:hover { transform: scale(1.02); }
+  .gallery-card:nth-child(1) { animation-delay: 0.02s; }
+  .gallery-card:nth-child(2) { animation-delay: 0.05s; }
+  .gallery-card:nth-child(3) { animation-delay: 0.08s; }
+  .gallery-card:nth-child(4) { animation-delay: 0.11s; }
+  .gallery-card:nth-child(5) { animation-delay: 0.14s; }
+  .gallery-card:nth-child(6) { animation-delay: 0.17s; }
+  .gallery-card:nth-child(7) { animation-delay: 0.20s; }
+  .gallery-card:nth-child(8) { animation-delay: 0.23s; }
+  .gallery-card:nth-child(9) { animation-delay: 0.26s; }
+  .gallery-card:hover {
+    transform: scale(1.04) translateY(-2px);
+    box-shadow: 0 10px 28px rgba(37,99,235,0.35);
+  }
+  .gallery-card:active { transform: scale(0.98); }
   .gallery-card .gallery-card-title {
     background: var(--bg-2);
     color: #ffffff;
@@ -344,7 +448,9 @@
   }
   .gallery-card .gallery-card-image img {
     width: 100%; height: 100%; object-fit: cover; display: block;
+    transition: transform 0.3s ease-out;
   }
+  .gallery-card:hover .gallery-card-image img { transform: scale(1.05); }
   .gallery-card .gallery-card-image .placeholder {
     color: var(--ink-soft); font-size: 14px; padding: 10px; text-align: center;
   }
@@ -364,8 +470,9 @@
     padding: 20px;
     z-index: 160;
     overflow-y: auto;
+    backdrop-filter: blur(2px);
   }
-  #roleExpandedModal.open { display: flex; }
+  #roleExpandedModal.open { display: flex; animation: fadeIn 0.2s ease-out; }
   .expanded-card {
     background: var(--card);
     border-radius: 18px;
@@ -373,12 +480,12 @@
     overflow: hidden;
     border: 2px solid var(--accent);
     color: var(--ink);
-    animation: expand 0.35s ease-out;
+    animation: expandCard 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
     max-height: 92vh;
     display: flex; flex-direction: column;
   }
-  @keyframes expand {
-    from { transform: scale(0.6); opacity: 0; }
+  @keyframes expandCard {
+    from { transform: scale(0.4); opacity: 0; }
     to { transform: scale(1); opacity: 1; }
   }
   .expanded-card .expanded-title {
@@ -390,6 +497,7 @@
     font-weight: 800;
     letter-spacing: 2px;
     flex-shrink: 0;
+    animation: fadeIn 0.4s ease-out;
   }
   .expanded-card .expanded-image {
     height: auto;
@@ -409,6 +517,7 @@
     height: auto;
     object-fit: contain;
     display: block;
+    animation: fadeIn 0.45s ease-out;
   }
   .expanded-card .expanded-image .placeholder {
     color: var(--ink-soft); font-size: 16px; text-align: center; padding: 20px;
@@ -417,6 +526,7 @@
     padding: 18px 22px;
     overflow-y: auto;
     flex: 1;
+    animation: fadeInUp 0.45s ease-out;
   }
   .expanded-card .expanded-body .expanded-desc {
     font-size: 15px;
@@ -443,16 +553,13 @@
     background: var(--bg-2);
     padding: 14px;
     flex-shrink: 0;
+    transition: background 0.2s, transform 0.1s;
   }
   .expanded-card .expanded-close:hover { background: var(--bg-3); }
+  .expanded-card .expanded-close:active { transform: scale(0.97); }
 </style>
 </head>
 <body>
-
-  <div id="topBar">
-    <span>Мафия: <span id="nameDisplay"></span></span>
-    <span class="badge" id="connBadge">онлайн</span>
-  </div>
 
   <button id="roleBtn" aria-label="Показать роль"></button>
 
@@ -624,9 +731,6 @@
   const joinBtn = document.getElementById('joinBtn');
   const errorMsg = document.getElementById('errorMsg');
   const roomLabel = document.getElementById('roomLabel');
-  const topBar = document.getElementById('topBar');
-  const nameDisplay = document.getElementById('nameDisplay');
-  const connBadge = document.getElementById('connBadge');
   const roleBtn = document.getElementById('roleBtn');
   const roleModal = document.getElementById('roleModal');
   const roleTitle = document.getElementById('roleTitle');
@@ -701,7 +805,12 @@
 
   function showScreen(el) {
     [joinScreen, waitScreen].forEach(s => s.style.display = 'none');
-    if (el) el.style.display = 'block';
+    if (el) {
+      el.style.display = 'block';
+      el.style.animation = 'none';
+      void el.offsetWidth;
+      el.style.animation = '';
+    }
   }
   function hideAllScreens() {
     joinScreen.style.display = 'none';
@@ -830,18 +939,15 @@
       playerName = name;
       myId = res.playerId;
       localStorage.setItem('mafia_player', JSON.stringify({ name, room: code, token: playerToken }));
-      topBar.style.display = 'flex';
-      nameDisplay.textContent = name;
       roomLabel.textContent = code;
       showScreen(waitScreen);
       rolesBtn.style.display = 'inline-block';
-      updateConnBadge(true);
     });
   }
 
   socket.on('yourRole', ({ role, name, image }) => {
     myRole = role;
-    if (name) { playerName = name; nameDisplay.textContent = name; }
+    if (name) { playerName = name; }
     const data = ROLES[role];
     if (!data) return;
     roleTitle.textContent = data.label;
@@ -872,13 +978,7 @@
   peekClose.addEventListener('click', () => peekModal.classList.remove('open'));
   peekModal.addEventListener('click', (e) => { if (e.target === peekModal) peekModal.classList.remove('open'); });
 
-  function updateConnBadge(online) {
-    connBadge.textContent = online ? 'онлайн' : 'оффлайн';
-    connBadge.className = 'badge' + (online ? '' : ' off');
-  }
-  socket.on('disconnect', () => updateConnBadge(false));
   socket.on('connect', () => {
-    updateConnBadge(true);
     if (roomId && playerToken) {
       socket.emit('joinGame', { roomId, name: playerName, playerToken }, () => {});
     }
@@ -979,7 +1079,6 @@
     if (phase === 'night') { nightScreen.style.display = 'block'; nightDay.textContent = day; }
     if (phase === 'day') { dayScreen.style.display = 'block'; dayDay.textContent = day; }
     if (phase === 'ended') {
-      // экран завершения — можно показать простой экран ожидания
       showScreen(waitScreen);
     }
   });
@@ -989,6 +1088,7 @@
     if (data.stepRole === null) {
       nightSub.textContent = 'Переход…';
       nightTimer.textContent = '—';
+      nightTimer.classList.remove('warn');
       nightActionArea.style.display = 'none';
       if (nightInterval) { clearInterval(nightInterval); nightInterval = null; }
       return;
@@ -1034,6 +1134,8 @@
   function updateTimer() {
     const left = Math.max(0, Math.ceil((nightDeadline - Date.now()) / 1000));
     nightTimer.textContent = left + 'с';
+    if (left <= 10) nightTimer.classList.add('warn');
+    else nightTimer.classList.remove('warn');
   }
 
   function renderNightTargets(data) {
