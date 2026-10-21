@@ -395,7 +395,9 @@
       <div id="nightLog" style="display:none; margin-top:20px;">
         <div class="section-title">Ход ночи</div>
         <div id="nightSteps" class="muted" style="margin-bottom:12px;"></div>
-        <div class="section-title">Действия игроков</div>
+        <div class="section-title">Предложения мафии/дона</div>
+        <ul id="nightProposals"></ul>
+        <div class="section-title">Окончательные действия</div>
         <ul id="nightActions"></ul>
       </div>
 
@@ -459,7 +461,6 @@
     </div>
   </div>
 
-  <!-- Модалка конца игры -->
   <div id="gameEndModal">
     <div class="game-end-card">
       <div class="game-end-title" id="gameEndTitle">—</div>
@@ -498,6 +499,7 @@
   const hintsInfo = document.getElementById('hintsInfo');
   const nightLog = document.getElementById('nightLog');
   const nightSteps = document.getElementById('nightSteps');
+  const nightProposals = document.getElementById('nightProposals');
   const nightActions = document.getElementById('nightActions');
   const nightResultsBox = document.getElementById('nightResultsBox');
   const nightResults = document.getElementById('nightResults');
@@ -879,8 +881,31 @@
   socket.on('hostNightState', (state) => {
     nightLog.style.display = 'block';
     nightSteps.textContent = `Шаг ${state.stepIndex + 1}/${state.totalSteps}: ${state.stepLabel || '—'}`;
-    nightActions.innerHTML = '';
 
+    // Предложения мафии/дона
+    nightProposals.innerHTML = '';
+    if (state.proposals && state.proposals.mafia_don) {
+      Object.entries(state.proposals.mafia_don).forEach(([actorId, prop]) => {
+        if (!prop) return;
+        const actor = state.players.find(p => p.id === actorId);
+        const target = state.players.find(p => p.id === prop.targetId);
+        if (!actor) return;
+        const li = document.createElement('li');
+        li.className = 'player';
+        li.style.borderLeftColor = prop.mode === 'invite' ? '#16a34a' : '#7f1d1d';
+        li.textContent = `${prop.mode === 'invite' ? 'Пригласить' : 'Убить'}: ${actor.name} → ${target ? target.name : '?'}`;
+        nightProposals.appendChild(li);
+      });
+    }
+    if (!nightProposals.children.length) {
+      const li = document.createElement('li');
+      li.className = 'muted';
+      li.textContent = 'Пока никто не предложил';
+      nightProposals.appendChild(li);
+    }
+
+    // Окончательные действия
+    nightActions.innerHTML = '';
     const roleLabelRu = {
       mafia: 'Мафия', don: 'Дон', sheriff: 'Следователь', doctor: 'Доктор',
       maniac: 'Маньяк', beauty: 'Красавчик', journalist: 'Журналист'
@@ -894,13 +919,14 @@
           if (!actor) return;
           const li = document.createElement('li');
           li.className = 'player';
-          li.style.borderLeftColor = '#7f1d1d';
+          li.style.borderLeftColor = act.mode === 'invite' ? '#16a34a' : '#7f1d1d';
           li.textContent = `${act.mode === 'invite' ? 'Приглашение' : 'Убийство'}: ${actor.name} → ${target ? target.name : '?'}`;
           nightActions.appendChild(li);
         });
         return;
       }
       Object.entries(map).forEach(([actorId, targetVal]) => {
+        if (targetVal === null) return; // пропуск (blocked pass)
         const actor = state.players.find(p => p.id === actorId);
         if (!actor) return;
         const targets = Array.isArray(targetVal) ? targetVal : [targetVal];
@@ -919,7 +945,7 @@
     if (!nightActions.children.length) {
       const li = document.createElement('li');
       li.className = 'muted';
-      li.textContent = 'Пока никто не выбрал';
+      li.textContent = 'Пока никто не подтвердил';
       nightActions.appendChild(li);
     }
   });
@@ -1058,7 +1084,6 @@
     dayResults.appendChild(li);
   });
 
-  // ---- Конец игры ----
   socket.on('gameEnded', ({ winner, roles }) => {
     if (winner === 'manual') gameEndTitle.textContent = 'Игра завершена ведущим';
     else if (winner === 'mafia') gameEndTitle.textContent = 'Победила МАФИЯ';
@@ -1084,7 +1109,6 @@
 
   gameEndBtn.addEventListener('click', () => {
     gameEndModal.classList.remove('open');
-    // Возврат на экран создания комнаты
     localStorage.removeItem('mafia_host');
     roomId = null;
     hostToken = null;
@@ -1092,7 +1116,6 @@
     setupEl.style.display = 'block';
     createBtn.disabled = false;
     statusEl.textContent = '';
-    // Очистить блоки
     lobbyList.style.display = 'block';
     gameList.style.display = 'none';
     startBtn.disabled = true;
