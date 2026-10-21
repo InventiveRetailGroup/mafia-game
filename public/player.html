@@ -89,7 +89,6 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* Кнопка Р — буква всегда видна */
   #roleBtn {
     position: fixed; top: 16px; right: 16px;
     width: 52px; height: 52px; border-radius: 12px;
@@ -557,8 +556,12 @@
         <div id="recruitsLeftBox" class="recruits-left" style="display:none;"></div>
         <div class="sub" id="nightInstruction"></div>
         <ul id="nightTargets" class="targets"></ul>
+        <button id="doctorSelfBtn" style="display:none; margin-top:8px; background:#16a34a;">Выбрать себя</button>
+        <button id="mafiaConfirmBtn" style="display:none; margin-top:8px;">Подтвердить выбор</button>
         <button id="nightConfirmBtn" style="display:none; margin-top:12px;">Подтвердить</button>
       </div>
+
+      <button id="blockedContinueBtn" style="display:none; margin-top:12px; background:#16a34a;">Продолжить</button>
     </div>
   </div>
 
@@ -734,6 +737,9 @@
   const nightInstruction = document.getElementById('nightInstruction');
   const nightTargets = document.getElementById('nightTargets');
   const nightConfirmBtn = document.getElementById('nightConfirmBtn');
+  const doctorSelfBtn = document.getElementById('doctorSelfBtn');
+  const mafiaConfirmBtn = document.getElementById('mafiaConfirmBtn');
+  const blockedContinueBtn = document.getElementById('blockedContinueBtn');
   const donModeSwitch = document.getElementById('donModeSwitch');
   const modeKill = document.getElementById('modeKill');
   const modeInvite = document.getElementById('modeInvite');
@@ -915,7 +921,6 @@
     });
   }
 
-  // Новая роль в начале игры — открываем карточку
   socket.on('yourRole', ({ role, name, image }) => {
     myRole = role;
     if (name) { playerName = name; }
@@ -939,7 +944,6 @@
     openModal();
   });
 
-  // Переподключение — только восстанавливаем кнопку, карточку не открываем
   socket.on('roleReconnect', ({ role, name, image }) => {
     myRole = role;
     if (name) { playerName = name; }
@@ -984,8 +988,8 @@
   socket.on('privateResult', (data) => {
     if (data.type === 'sheriff') {
       resultLabel.textContent = 'РЕЗУЛЬТАТ ПРОВЕРКИ';
-      resultTitle.textContent = data.isMafia ? 'ЭТО МАФИЯ' : 'НЕ МАФИЯ';
-      resultTitle.className = 'role-title ' + (data.isMafia ? 'mafia' : 'citizen');
+      resultTitle.textContent = data.targetRoleName || (data.isMafia ? 'МАФИЯ' : 'НЕ МАФИЯ');
+      resultTitle.className = 'role-title ' + data.targetRole;
       resultDesc.innerHTML = data.message;
       setPortrait(resultPortrait, null, '');
       const img = new Image();
@@ -1067,6 +1071,7 @@
     hideAllScreens();
     if (nightInterval) { clearInterval(nightInterval); nightInterval = null; }
     closeGallery();
+    blockedContinueBtn.style.display = 'none';
     if (phase === 'roles') { showScreen(waitScreen); roomLabel.textContent = roomId; rolesBtn.style.display = 'none'; }
     if (phase === 'night') { nightScreen.style.display = 'block'; nightDay.textContent = day; }
     if (phase === 'day') { dayScreen.style.display = 'block'; dayDay.textContent = day; }
@@ -1082,6 +1087,7 @@
       nightTimer.textContent = '—';
       nightTimer.classList.remove('warn');
       nightActionArea.style.display = 'none';
+      blockedContinueBtn.style.display = 'none';
       if (nightInterval) { clearInterval(nightInterval); nightInterval = null; }
       return;
     }
@@ -1101,6 +1107,7 @@
       nightSub.textContent = 'Вы погибли. Наблюдаете молча.';
       blockedNote.style.display = 'none';
       nightActionArea.style.display = 'none';
+      blockedContinueBtn.style.display = 'none';
       return;
     }
 
@@ -1108,9 +1115,18 @@
       nightSub.textContent = '';
       blockedNote.style.display = 'block';
       nightActionArea.style.display = 'none';
+
+      // Кнопка "Продолжить" — только если нет коллег (мафия/дон) или это не мафия
+      const isMafiaRole = (data.yourRole === 'mafia' || data.yourRole === 'don');
+      if (!isMafiaRole || data.blockedMafiaAlone) {
+        blockedContinueBtn.style.display = 'block';
+      } else {
+        blockedContinueBtn.style.display = 'none';
+      }
       return;
     } else {
       blockedNote.style.display = 'none';
+      blockedContinueBtn.style.display = 'none';
     }
 
     if (data.yourTurn) {
@@ -1134,9 +1150,9 @@
     const role = data.yourRole;
     const isMafiaStep = data.stepRole === 'mafia_don';
     const roleHints = {
-      mafia: 'Выберите жертву. Все мафии (и Дон) должны проголосовать за одного.',
-      don: 'Выберите жертву (все мафии должны согласиться) или пригласите игрока в мафию. Одно действие за ночь.',
-      sheriff: 'Выберите игрока для проверки — сразу увидите результат.',
+      mafia: 'Выберите жертву. Все мафии (и Дон) должны подтвердить одного.',
+      don: 'Выберите жертву или пригласите игрока. Все мафии должны подтвердить.',
+      sheriff: 'Выберите игрока для проверки — узнаете его роль.',
       doctor: 'Выберите игрока для лечения.',
       maniac: 'Выберите жертву.',
       beauty: 'Выберите игрока, чтобы заблокировать его действие. Он будет защищён от казни днём.',
@@ -1144,9 +1160,11 @@
     };
     nightInstruction.textContent = roleHints[role] || 'Выберите цель.';
     nightConfirmBtn.style.display = 'none';
+    doctorSelfBtn.style.display = 'none';
+    mafiaConfirmBtn.style.display = 'none';
     journalSelected = [];
 
-    const alreadyActed = data.myMafiaAction !== null;
+    const alreadyActed = data.myConfirmed;
     if (role === 'don' && isMafiaStep && !alreadyActed) {
       donModeSwitch.style.display = 'flex';
       modeKill.classList.toggle('active', donMode === 'kill');
@@ -1166,22 +1184,39 @@
       recruitsLeftBox.style.display = 'none';
     }
 
+    // Доктор — кнопка "Выбрать себя"
+    if (role === 'doctor' && data.doctorCanSelf) {
+      doctorSelfBtn.style.display = 'block';
+    }
+
+    // Мафия — кнопка "Подтвердить выбор" (если есть предложение, но ещё не подтверждено)
+    if (isMafiaStep && (role === 'mafia' || role === 'don') && data.myProposal && !data.myConfirmed) {
+      mafiaConfirmBtn.style.display = 'block';
+    }
+
     nightTargets.innerHTML = '';
 
     if (alreadyActed && (role === 'mafia' || role === 'don')) {
       const li = document.createElement('li');
       li.className = 'feedback-note';
-      const act = data.myMafiaAction;
-      const target = data.players.find(p => p.id === act.targetId);
-      li.textContent = act.mode === 'kill'
-        ? `Вы выбрали убить: ${target ? target.name : '?'}`
-        : `Вы пригласили: ${target ? target.name : '?'}`;
+      const act = data.myProposal;
+      if (act) {
+        const target = data.players.find(p => p.id === act.targetId);
+        li.textContent = act.mode === 'kill'
+          ? `Вы подтвердили убить: ${target ? target.name : '?'}`
+          : `Вы подтвердили пригласить: ${target ? target.name : '?'}`;
+      } else {
+        li.textContent = 'Вы подтвердили выбор';
+      }
       nightTargets.appendChild(li);
     }
 
     data.players.forEach(p => {
       if (!p.alive || p.id === data.yourId) return;
       if (alreadyActed && (role === 'mafia' || role === 'don')) return;
+
+      // Мафия/дон не видит своих как цель для убийства
+      const isOwnTeam = isMafiaStep && (role === 'mafia' || role === 'don') && (p.role === 'mafia' || p.role === 'don');
 
       const li = document.createElement('li');
       li.className = 'target';
@@ -1191,11 +1226,22 @@
       nameSpan.textContent = p.name;
       li.appendChild(nameSpan);
 
-      if (isMafiaStep && (role === 'mafia' || role === 'don') && data.mafiaVotes) {
-        const votesFor = Object.entries(data.mafiaVotes)
-          .filter(([, act]) => act && act.targetId === p.id);
-        const killVotes = votesFor.filter(([, act]) => act.mode === 'kill').length;
-        const inviteVotes = votesFor.filter(([, act]) => act.mode === 'invite').length;
+      if (isOwnTeam) {
+        li.style.opacity = '0.6';
+        li.style.cursor = 'not-allowed';
+        const note = document.createElement('span');
+        note.style.fontSize = '12px';
+        note.style.marginLeft = '8px';
+        note.textContent = 'свой';
+        li.appendChild(note);
+      }
+
+      // Кружочки предложений
+      if (isMafiaStep && (role === 'mafia' || role === 'don') && data.proposals) {
+        const proposalsFor = Object.entries(data.proposals)
+          .filter(([actorId, prop]) => prop && prop.targetId === p.id);
+        const killVotes = proposalsFor.filter(([, prop]) => prop.mode === 'kill').length;
+        const inviteVotes = proposalsFor.filter(([, prop]) => prop.mode === 'invite').length;
 
         if (killVotes > 0 || inviteVotes > 0) {
           const dots = document.createElement('span');
@@ -1206,38 +1252,63 @@
           for (let i = 0; i < inviteVotes; i++) {
             const d = document.createElement('span'); d.className = 'd invite'; dots.appendChild(d);
           }
-          const names = votesFor.map(([actorId, act]) => {
+          const names = proposalsFor.map(([actorId, prop]) => {
             const actor = data.players.find(pp => pp.id === actorId);
-            return (actor ? actor.name : '?') + (act.mode === 'invite' ? ' (приглашает)' : '');
+            return (actor ? actor.name : '?') + (prop.mode === 'invite' ? ' (приглашает)' : '');
           });
           dots.title = names.join(', ');
           li.appendChild(dots);
         }
       }
 
-      li.onclick = () => {
-        if (role === 'journalist') {
-          toggleJournalistPick(li, p.id);
-        } else if (role === 'don' && isMafiaStep) {
-          socket.emit('nightAction', { roomId, targetId: p.id, mode: donMode }, (res) => {
-            if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
-            else if (res.invite === 'declined') alert('Этот игрок отказался (особая роль)');
-            else if (res.invite === 'pending') alert('Приглашение отправлено. Ответ узнаете утром, а исход — в следующий ход.');
-          });
-        } else if ((role === 'mafia') && isMafiaStep) {
-          socket.emit('nightAction', { roomId, targetId: p.id, mode: 'kill' }, (res) => {
-            if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
-          });
-        } else {
-          socket.emit('nightAction', { roomId, targetId: p.id }, (res) => {
-            if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
-          });
-        }
-      };
+      if (isMafiaStep && data.myProposal && data.myProposal.targetId === p.id) {
+        li.classList.add('selected');
+      }
+
+      if (!isOwnTeam) {
+        li.onclick = () => {
+          if (role === 'journalist') {
+            toggleJournalistPick(li, p.id);
+          } else if (role === 'don' && isMafiaStep) {
+            socket.emit('nightAction', { roomId, targetId: p.id, mode: donMode, type: 'propose' }, (res) => {
+              if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
+              else if (res.invite === 'declined') alert('Этот игрок отказался (особая роль)');
+            });
+          } else if (isMafiaStep && (role === 'mafia' || role === 'don')) {
+            socket.emit('nightAction', { roomId, targetId: p.id, mode: 'kill', type: 'propose' }, (res) => {
+              if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
+            });
+          } else {
+            socket.emit('nightAction', { roomId, targetId: p.id }, (res) => {
+              if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
+            });
+          }
+        };
+      }
 
       nightTargets.appendChild(li);
     });
   }
+
+  doctorSelfBtn.addEventListener('click', () => {
+    socket.emit('nightAction', { roomId, self: true }, (res) => {
+      if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
+    });
+  });
+
+  mafiaConfirmBtn.addEventListener('click', () => {
+    socket.emit('nightAction', { roomId, type: 'confirm' }, (res) => {
+      if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
+      else mafiaConfirmBtn.style.display = 'none';
+    });
+  });
+
+  blockedContinueBtn.addEventListener('click', () => {
+    socket.emit('nightPass', { roomId }, (res) => {
+      if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
+      else blockedContinueBtn.style.display = 'none';
+    });
+  });
 
   modeKill.addEventListener('click', () => {
     donMode = 'kill';
@@ -1430,7 +1501,6 @@
     playerToken = null;
     myRole = null;
     myId = null;
-    // Оставляем имя, но чистим комнату
     const saved = localStorage.getItem('mafia_player');
     if (saved) {
       try {
