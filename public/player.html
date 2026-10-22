@@ -504,11 +504,11 @@
     border-left: 4px solid transparent;
     animation: fadeInUp 0.3s ease-out backwards;
   }
-  .game-end-roles li.role-mafia, .game-end-roles li.role-don {
+  .game-end-roles li.role-mafia, .game-end-roles li.role-don, .game-end-roles li.role-maniac {
     background: #fecaca; color: #7f1d1d; border-left-color: #7f1d1d;
   }
   .game-end-roles li.role-sheriff, .game-end-roles li.role-doctor,
-  .game-end-roles li.role-maniac, .game-end-roles li.role-beauty,
+  .game-end-roles li.role-beauty,
   .game-end-roles li.role-journalist {
     background: #bfdbfe; color: #1e3a8a; border-left-color: #1e3a8a;
   }
@@ -991,7 +991,6 @@
   peekClose.addEventListener('click', () => peekModal.classList.remove('open'));
   peekModal.addEventListener('click', (e) => { if (e.target === peekModal) peekModal.classList.remove('open'); });
 
-  // Клик по кнопке-письму — открыть модалку с приглашением
   inviteBtn.addEventListener('click', () => {
     inviteModal.classList.add('open');
   });
@@ -1371,7 +1370,6 @@
     dayScreen.style.display = 'block';
     dayDay.textContent = data.day;
 
-    // Кнопка-письмо с приглашением (на случай переподключения)
     if (data.pendingInvite) {
       inviteBtn.style.display = 'flex';
     } else {
@@ -1502,10 +1500,11 @@
 
     if (winner === 'manual') gameEndTitle.textContent = 'Игра завершена ведущим';
     else if (winner === 'mafia') gameEndTitle.textContent = 'Победила МАФИЯ';
+    else if (winner === 'maniac') gameEndTitle.textContent = 'Победил МАНЬЯК';
     else gameEndTitle.textContent = 'Победили МИРНЫЕ';
 
     gameEndRoles.innerHTML = '';
-    const order = { mafia: 0, don: 1, sheriff: 2, doctor: 3, maniac: 4, beauty: 5, journalist: 6, citizen: 7 };
+    const order = { mafia: 0, don: 1, maniac: 2, sheriff: 3, doctor: 4, beauty: 5, journalist: 6, citizen: 7 };
     roles.slice().sort((a, b) => (order[a.role] ?? 99) - (order[b.role] ?? 99)).forEach(p => {
       const li = document.createElement('li');
       li.className = 'role-' + p.role;
