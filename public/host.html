@@ -257,7 +257,6 @@
   }
   .expanded-card .expanded-close:hover { background: var(--bg-3); }
 
-  /* Модалка конца игры */
   #gameEndModal {
     position: fixed; inset: 0;
     background: rgba(15, 31, 74, 0.9);
@@ -302,12 +301,11 @@
     background: var(--card-2); color: var(--ink);
     border-left: 4px solid transparent;
   }
-  .game-end-roles li.role-mafia, .game-end-roles li.role-don {
+  .game-end-roles li.role-mafia, .game-end-roles li.role-don, .game-end-roles li.role-maniac {
     background: #fecaca; color: #7f1d1d; border-left-color: #7f1d1d;
   }
   .game-end-roles li.role-sheriff, .game-end-roles li.role-doctor,
-  .game-end-roles li.role-maniac, .game-end-roles li.role-beauty,
-  .game-end-roles li.role-journalist {
+  .game-end-roles li.role-beauty, .game-end-roles li.role-journalist {
     background: #bfdbfe; color: #1e3a8a; border-left-color: #1e3a8a;
   }
   .game-end-roles li.role-citizen {
@@ -882,7 +880,6 @@
     nightLog.style.display = 'block';
     nightSteps.textContent = `Шаг ${state.stepIndex + 1}/${state.totalSteps}: ${state.stepLabel || '—'}`;
 
-    // Предложения мафии/дона
     nightProposals.innerHTML = '';
     if (state.proposals && state.proposals.mafia_don) {
       Object.entries(state.proposals.mafia_don).forEach(([actorId, prop]) => {
@@ -904,7 +901,6 @@
       nightProposals.appendChild(li);
     }
 
-    // Окончательные действия
     nightActions.innerHTML = '';
     const roleLabelRu = {
       mafia: 'Мафия', don: 'Дон', sheriff: 'Следователь', doctor: 'Доктор',
@@ -914,6 +910,15 @@
     Object.entries(state.actions).forEach(([role, map]) => {
       if (role === 'mafia_don') {
         Object.entries(map).forEach(([actorId, act]) => {
+          if (act === null) {
+            const actor = state.players.find(p => p.id === actorId);
+            if (!actor) return;
+            const li = document.createElement('li');
+            li.className = 'player';
+            li.textContent = `Пропуск: ${actor.name}`;
+            nightActions.appendChild(li);
+            return;
+          }
           const actor = state.players.find(p => p.id === actorId);
           const target = state.players.find(p => p.id === act.targetId);
           if (!actor) return;
@@ -926,7 +931,7 @@
         return;
       }
       Object.entries(map).forEach(([actorId, targetVal]) => {
-        if (targetVal === null) return; // пропуск (blocked pass)
+        if (targetVal === null) return;
         const actor = state.players.find(p => p.id === actorId);
         if (!actor) return;
         const targets = Array.isArray(targetVal) ? targetVal : [targetVal];
@@ -1087,10 +1092,11 @@
   socket.on('gameEnded', ({ winner, roles }) => {
     if (winner === 'manual') gameEndTitle.textContent = 'Игра завершена ведущим';
     else if (winner === 'mafia') gameEndTitle.textContent = 'Победила МАФИЯ';
+    else if (winner === 'maniac') gameEndTitle.textContent = 'Победил МАНЬЯК';
     else gameEndTitle.textContent = 'Победили МИРНЫЕ';
 
     gameEndRoles.innerHTML = '';
-    const order = { mafia: 0, don: 1, sheriff: 2, doctor: 3, maniac: 4, beauty: 5, journalist: 6, citizen: 7 };
+    const order = { mafia: 0, don: 1, maniac: 2, sheriff: 3, doctor: 4, beauty: 5, journalist: 6, citizen: 7 };
     roles.slice().sort((a, b) => (order[a.role] ?? 99) - (order[b.role] ?? 99)).forEach(p => {
       const li = document.createElement('li');
       li.className = 'role-' + p.role;
