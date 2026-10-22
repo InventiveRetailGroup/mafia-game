@@ -378,16 +378,21 @@ function handleNightAction(roomId, playerId, payload) {
       if (target.role === 'mafia' || target.role === 'don') {
         return { ok: false, error: 'Этот игрок уже мафия' };
       }
+
       game.recruitsLeft--;
       if (!game.night.proposals.mafia_don) game.night.proposals.mafia_don = {};
       game.night.proposals.mafia_don[player.id] = { mode: 'invite', targetId: target.id };
 
-      const accepted = !UNRECRUITABLE.includes(target.role);
-      if (!accepted) {
-        game.pendingDonFeedback = `Ваше приглашение игроку ${target.name} отклонено`;
+      // Особая роль — приглашение "уходит", но игрок его не получит.
+      // Дон узнает об отказе в СЛЕДУЮЩИЙ свой ход ночью (как будто игрок реально отказался).
+      const isSpecialRole = UNRECRUITABLE.includes(target.role);
+      if (isSpecialRole) {
+        game.pendingDonFeedback = `Игрок ${target.name} отклонил приглашение`;
+        // pendingInvites не создаём — игрок ничего не увидит
       }
+
       broadcastNightState(roomId);
-      return { ok: true, invite: accepted ? 'pending' : 'declined', proposed: true };
+      return { ok: true, invite: 'pending', proposed: true };
     }
 
     if (!game.night.proposals.mafia_don) game.night.proposals.mafia_don = {};
@@ -677,13 +682,16 @@ function finishNight(roomId) {
     if (inviter) {
       const tId = map[inviter.id].targetId;
       const target = game.players.find(p => p.id === tId && p.alive);
-      if (target) {
+      if (target && !UNRECRUITABLE.includes(target.role)) {
+        // Особая роль — приглашение не создаётся, игрок о нём не узнает.
         pendingInvite = {
           targetId: target.id,
           targetName: target.name,
           byDonId: inviter.id
         };
         journal.push(`Приглашение отправлено игроку ${target.name} — ответ утром`);
+      } else if (target) {
+        journal.push(`Приглашение отправлено игроку ${target.name}`);
       }
     }
   }
