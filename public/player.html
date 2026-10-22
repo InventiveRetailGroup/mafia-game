@@ -105,6 +105,26 @@
   #roleBtn:hover { transform: scale(1.06); box-shadow: 0 6px 20px rgba(37,99,235,0.45); }
   #roleBtn:active { transform: scale(0.95); }
 
+  #inviteBtn {
+    position: fixed; top: 16px; right: 80px;
+    width: 52px; height: 52px; border-radius: 12px;
+    background: #16a34a; border: 2px solid #15803d;
+    color: #fff;
+    padding: 0;
+    display: none; align-items: center; justify-content: center;
+    box-shadow: 0 4px 12px rgba(22,163,74,0.45);
+    z-index: 50; cursor: pointer;
+    font-size: 24px; font-weight: 700;
+    transition: transform 0.15s, box-shadow 0.2s, background 0.2s;
+    animation: invitePulse 1.4s ease-in-out infinite;
+  }
+  #inviteBtn:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(22,163,74,0.6); }
+  #inviteBtn:active { transform: scale(0.95); }
+  @keyframes invitePulse {
+    0%, 100% { box-shadow: 0 4px 12px rgba(22,163,74,0.45); }
+    50% { box-shadow: 0 4px 20px rgba(22,163,74,0.85); }
+  }
+
   @keyframes fadeInScale {
     from { opacity: 0; transform: scale(0.6); }
     to { opacity: 1; transform: scale(1); }
@@ -445,7 +465,6 @@
   .expanded-card .expanded-close:hover { background: var(--bg-3); }
   .expanded-card .expanded-close:active { transform: scale(0.97); }
 
-  /* Модалка конца игры */
   #gameEndModal .game-end-card {
     background: var(--card);
     border-radius: 18px;
@@ -499,9 +518,6 @@
   .game-end-roles li .role-tag {
     font-size: 12px; font-weight: 700; letter-spacing: 1px;
   }
-  .game-end-roles li .role-dead {
-    font-size: 11px; color: #6b7280;
-  }
   .game-end-btn {
     margin: 0 20px 20px;
     width: calc(100% - 40px);
@@ -513,6 +529,7 @@
 <body>
 
   <button id="roleBtn" aria-label="Показать роль">Р</button>
+  <button id="inviteBtn" aria-label="Приглашение">✉</button>
 
   <div id="content">
     <div class="card" id="joinScreen">
@@ -652,7 +669,6 @@
     </div>
   </div>
 
-  <!-- Модалка конца игры -->
   <div id="gameEndModal">
     <div class="game-end-card">
       <div class="game-end-title" id="gameEndTitle">—</div>
@@ -697,6 +713,7 @@
   const errorMsg = document.getElementById('errorMsg');
   const roomLabel = document.getElementById('roomLabel');
   const roleBtn = document.getElementById('roleBtn');
+  const inviteBtn = document.getElementById('inviteBtn');
   const roleModal = document.getElementById('roleModal');
   const roleTitle = document.getElementById('roleTitle');
   const rolePortrait = document.getElementById('rolePortrait');
@@ -974,6 +991,11 @@
   peekClose.addEventListener('click', () => peekModal.classList.remove('open'));
   peekModal.addEventListener('click', (e) => { if (e.target === peekModal) peekModal.classList.remove('open'); });
 
+  // Клик по кнопке-письму — открыть модалку с приглашением
+  inviteBtn.addEventListener('click', () => {
+    inviteModal.classList.add('open');
+  });
+
   socket.on('connect', () => {
     if (roomId && playerToken && !gameEnded) {
       socket.emit('joinGame', { roomId, name: playerName, playerToken }, () => {});
@@ -1037,22 +1059,25 @@
       setTimeout(() => alert('Утро. Погибли: ' + deaths.map(d => d.name).join(', ')), 100);
     }
     if (pendingInvite) {
-      setTimeout(() => inviteModal.classList.add('open'), 300);
+      inviteBtn.style.display = 'flex';
     } else {
-      showScreen(waitScreen);
-      roomLabel.textContent = roomId;
+      inviteBtn.style.display = 'none';
     }
+    showScreen(waitScreen);
+    roomLabel.textContent = roomId;
   });
 
   inviteAccept.addEventListener('click', () => {
     socket.emit('respondInvite', { roomId, accept: true }, () => {});
     inviteModal.classList.remove('open');
+    inviteBtn.style.display = 'none';
     showScreen(waitScreen);
     roomLabel.textContent = roomId;
   });
   inviteReject.addEventListener('click', () => {
     socket.emit('respondInvite', { roomId, accept: false }, () => {});
     inviteModal.classList.remove('open');
+    inviteBtn.style.display = 'none';
     showScreen(waitScreen);
     roomLabel.textContent = roomId;
   });
@@ -1072,6 +1097,10 @@
     if (nightInterval) { clearInterval(nightInterval); nightInterval = null; }
     closeGallery();
     blockedContinueBtn.style.display = 'none';
+    if (phase === 'lobby' || phase === 'roles') {
+      inviteBtn.style.display = 'none';
+      inviteModal.classList.remove('open');
+    }
     if (phase === 'roles') { showScreen(waitScreen); roomLabel.textContent = roomId; rolesBtn.style.display = 'none'; }
     if (phase === 'night') { nightScreen.style.display = 'block'; nightDay.textContent = day; }
     if (phase === 'day') { dayScreen.style.display = 'block'; dayDay.textContent = day; }
@@ -1116,7 +1145,6 @@
       blockedNote.style.display = 'block';
       nightActionArea.style.display = 'none';
 
-      // Кнопка "Продолжить" — только если нет коллег (мафия/дон) или это не мафия
       const isMafiaRole = (data.yourRole === 'mafia' || data.yourRole === 'don');
       if (!isMafiaRole || data.blockedMafiaAlone) {
         blockedContinueBtn.style.display = 'block';
@@ -1184,12 +1212,10 @@
       recruitsLeftBox.style.display = 'none';
     }
 
-    // Доктор — кнопка "Выбрать себя"
     if (role === 'doctor' && data.doctorCanSelf) {
       doctorSelfBtn.style.display = 'block';
     }
 
-    // Мафия — кнопка "Подтвердить выбор" (если есть предложение, но ещё не подтверждено)
     if (isMafiaStep && (role === 'mafia' || role === 'don') && data.myProposal && !data.myConfirmed) {
       mafiaConfirmBtn.style.display = 'block';
     }
@@ -1215,7 +1241,6 @@
       if (!p.alive || p.id === data.yourId) return;
       if (alreadyActed && (role === 'mafia' || role === 'don')) return;
 
-      // Мафия/дон не видит своих как цель для убийства
       const isOwnTeam = isMafiaStep && (role === 'mafia' || role === 'don') && (p.role === 'mafia' || p.role === 'don');
 
       const li = document.createElement('li');
@@ -1236,7 +1261,6 @@
         li.appendChild(note);
       }
 
-      // Кружочки предложений
       if (isMafiaStep && (role === 'mafia' || role === 'don') && data.proposals) {
         const proposalsFor = Object.entries(data.proposals)
           .filter(([actorId, prop]) => prop && prop.targetId === p.id);
@@ -1272,7 +1296,6 @@
           } else if (role === 'don' && isMafiaStep) {
             socket.emit('nightAction', { roomId, targetId: p.id, mode: donMode, type: 'propose' }, (res) => {
               if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
-              else if (res.invite === 'declined') alert('Этот игрок отказался (особая роль)');
             });
           } else if (isMafiaStep && (role === 'mafia' || role === 'don')) {
             socket.emit('nightAction', { roomId, targetId: p.id, mode: 'kill', type: 'propose' }, (res) => {
@@ -1347,6 +1370,13 @@
     myVote = null;
     dayScreen.style.display = 'block';
     dayDay.textContent = data.day;
+
+    // Кнопка-письмо с приглашением (на случай переподключения)
+    if (data.pendingInvite) {
+      inviteBtn.style.display = 'flex';
+    } else {
+      inviteBtn.style.display = 'none';
+    }
 
     if (data.revoteCandidates && data.revoteCandidates.length) {
       revoteNote.style.display = 'block';
@@ -1464,10 +1494,11 @@
     else alert(`День ${day}. Никто не казнён`);
   });
 
-  // ---- Конец игры ----
   socket.on('gameEnded', ({ winner, roles }) => {
     gameEnded = true;
     localStorage.removeItem('mafia_player');
+    inviteBtn.style.display = 'none';
+    inviteModal.classList.remove('open');
 
     if (winner === 'manual') gameEndTitle.textContent = 'Игра завершена ведущим';
     else if (winner === 'mafia') gameEndTitle.textContent = 'Победила МАФИЯ';
@@ -1497,6 +1528,7 @@
     showScreen(joinScreen);
     roleBtn.style.display = 'none';
     rolesBtn.style.display = 'none';
+    inviteBtn.style.display = 'none';
     roomId = null;
     playerToken = null;
     myRole = null;
