@@ -93,6 +93,12 @@ function maxMafiaWithDon(n) {
   return 2;
 }
 
+// Считаем ТОЛЬКО мафий (без дона) — для лимита приглашений
+function aliveMafiaOnlyCount(game) {
+  return game.players.filter(p => p.alive && p.role === 'mafia').length;
+}
+
+// Считаем мафий + дон — для проверки конца игры
 function aliveMafiaCount(game) {
   return game.players.filter(p => p.alive && (p.role === 'mafia' || p.role === 'don')).length;
 }
@@ -102,7 +108,7 @@ function currentMafiaLimit(game) {
 }
 
 function canDonInvite(game) {
-  return game.recruitsLeft > 0 && aliveMafiaCount(game) < currentMafiaLimit(game);
+  return game.recruitsLeft > 0 && aliveMafiaOnlyCount(game) < currentMafiaLimit(game);
 }
 
 // ---- Раздача ролей ----
@@ -163,9 +169,9 @@ function beginNight(roomId) {
   if (!game.recruitsLeft) game.recruitsLeft = MAX_DON_RECRUITS;
 
   game.night = {
-    actions: {},          // role -> { playerId: targetId } — окончательные
-    proposals: {},        // mafia_don -> { playerId: { mode, targetId } } — предложения
-    confirmed: {},        // mafia_don -> Set(playerId) — кто подтвердил
+    actions: {},
+    proposals: {},
+    confirmed: {},
     blocked: [],
     lastDoctorTarget: game.lastDoctorTarget || null,
     doctorSelfUsed: game.doctorSelfUsed || false,
@@ -259,10 +265,8 @@ function broadcastNightState(roomId) {
       myConfirmed = !!game.night.confirmed.mafia_don?.[p.id];
     }
 
-    // Для доктора — доступна ли кнопка "Выбрать себя"
     const doctorCanSelf = p.role === 'doctor' && p.alive && !isBlocked && !game.night.doctorSelfUsed;
 
-    // Для заблокированной мафии/дона — есть ли коллеги (кроме него)
     let blockedMafiaAlone = false;
     if (isBlocked && (p.role === 'mafia' || p.role === 'don')) {
       const others = aliveMafiaTeam.filter(x => x.id !== p.id);
@@ -315,7 +319,6 @@ function buildHostNightState(game) {
   };
 }
 
-// Проверка: все живые мафии/дон подтвердили
 function allMafiaDonConfirmed(game) {
   const confirmed = game.night.confirmed.mafia_don || {};
   const players = game.players.filter(p =>
@@ -335,11 +338,9 @@ function handleNightAction(roomId, playerId, payload) {
   if (!player || !player.alive) return { ok: false, error: 'Вы не можете действовать' };
   if (game.night.blocked.includes(player.id)) return { ok: false, error: 'Вы заблокированы красавчиком' };
 
-  // ---------- МАФИЯ + ДОН ----------
   if (step.role === 'mafia_don' && (player.role === 'mafia' || player.role === 'don')) {
     const actionType = payload?.type || 'propose';
 
-    // Подтверждение выбора
     if (actionType === 'confirm') {
       const proposal = game.night.proposals.mafia_don?.[player.id];
       if (!proposal) return { ok: false, error: 'Сначала выберите цель' };
@@ -354,7 +355,6 @@ function handleNightAction(roomId, playerId, payload) {
       return { ok: true, confirmed: true };
     }
 
-    // Предложение (не окончательное)
     if (game.night.confirmed.mafia_don?.[player.id]) {
       return { ok: false, error: 'Вы уже подтвердили выбор' };
     }
@@ -364,7 +364,6 @@ function handleNightAction(roomId, playerId, payload) {
     const target = game.players.find(p => p.id === targetId && p.alive);
     if (!target) return { ok: false, error: 'Цель недоступна' };
 
-    // Мафия/дон не может выбрать своих
     if (mode === 'kill' && (target.role === 'mafia' || target.role === 'don')) {
       return { ok: false, error: 'Нельзя голосовать за своих' };
     }
@@ -391,14 +390,12 @@ function handleNightAction(roomId, playerId, payload) {
       return { ok: true, invite: accepted ? 'pending' : 'declined', proposed: true };
     }
 
-    // kill
     if (!game.night.proposals.mafia_don) game.night.proposals.mafia_don = {};
     game.night.proposals.mafia_don[player.id] = { mode: 'kill', targetId: target.id };
     broadcastNightState(roomId);
     return { ok: true, proposed: true };
   }
 
-  // ---------- ЖУРНАЛИСТ ----------
   if (player.role === 'journalist' && step.role === 'journalist') {
     const arr = Array.isArray(payload) ? payload : payload?.targetId;
     if (!Array.isArray(arr) || arr.length !== 2) {
@@ -427,7 +424,6 @@ function handleNightAction(roomId, playerId, payload) {
 
   if (player.role !== step.role) return { ok: false, error: 'Сейчас не ваш ход' };
 
-  // ---------- ДОКТОР: выбрать себя ----------
   if (player.role === 'doctor' && payload?.self) {
     if (game.night.doctorSelfUsed) return { ok: false, error: 'Вы уже лечили себя' };
     if (game.night.lastDoctorTarget === player.id) {
@@ -482,7 +478,6 @@ function handleNightAction(roomId, playerId, payload) {
   return { ok: true };
 }
 
-// Игрок нажал "Продолжить" (для заблокированных)
 function handleBlockedPass(roomId, playerId) {
   const game = games[roomId];
   if (!game || game.phase !== 'night') return { ok: false, error: 'Не ночь' };
@@ -491,24 +486,21 @@ function handleBlockedPass(roomId, playerId) {
   if (!player || !player.alive) return { ok: false };
   if (!game.night.blocked.includes(player.id)) return { ok: false, error: 'Вы не заблокированы' };
 
-  // Для мафии/дона: если есть другие живые — кнопка не должна была быть, но на всякий случай
   if (player.role === 'mafia' || player.role === 'don') {
     const others = game.players.filter(p => p.alive && p.id !== playerId && (p.role === 'mafia' || p.role === 'don'));
     if (others.length > 0) {
       return { ok: false, error: 'Дождитесь коллег' };
     }
-    // Один — фиксируем "пропуск"
     if (!game.night.confirmed.mafia_don) game.night.confirmed.mafia_don = {};
     game.night.confirmed.mafia_don[player.id] = true;
     tryAdvanceStep(roomId);
     return { ok: true };
   }
 
-  // Для остальных ролей — просто пропускаем шаг
   const step = game.night.steps[game.night.currentStepIndex];
   if (step && step.role === player.role) {
     if (!game.night.actions[player.role]) game.night.actions[player.role] = {};
-    game.night.actions[player.role][player.id] = null; // null = пропуск
+    game.night.actions[player.role][player.id] = null;
     tryAdvanceStep(roomId);
   }
   return { ok: true };
@@ -523,19 +515,16 @@ function tryAdvanceStep(roomId) {
   const role = step.role;
 
   if (role === 'mafia_don') {
-    // Проверяем: все ли подтвердили
     if (!allMafiaDonConfirmed(game)) {
       broadcastNightState(roomId);
       return;
     }
 
-    // Все подтвердили — проверяем согласованность
     const actionsMap = game.night.actions.mafia_don || {};
     const aliveTeam = game.players.filter(p =>
       p.alive && (p.role === 'mafia' || p.role === 'don') && !game.night.blocked.includes(p.id)
     );
 
-    // Если кто-то приглашает — убийства нет
     const anyInvite = aliveTeam.some(p => actionsMap[p.id] && actionsMap[p.id].mode === 'invite');
     if (anyInvite) {
       broadcastNightState(roomId);
@@ -543,7 +532,6 @@ function tryAdvanceStep(roomId) {
       return;
     }
 
-    // Все убивают одного?
     const killTargets = aliveTeam
       .filter(p => actionsMap[p.id] && actionsMap[p.id].mode === 'kill')
       .map(p => actionsMap[p.id].targetId);
@@ -553,12 +541,10 @@ function tryAdvanceStep(roomId) {
       return;
     }
 
-    // Не договорились — ждём таймер
     broadcastNightState(roomId);
     return;
   }
 
-  // Другие роли
   const rolePlayers = game.players.filter(p =>
     p.alive && p.role === role && !game.night.blocked.includes(p.id)
   );
@@ -1228,7 +1214,6 @@ function generateHint(game, targetPlayerId) {
   const alive = game.players.filter(p => p.alive && p.id !== targetPlayerId);
   if (alive.length === 0) return null;
 
-  // 1, 2 или 3 случайных игроков
   const rand = Math.random();
   let howMany;
   if (rand < 0.33) howMany = 1;
@@ -1251,7 +1236,6 @@ function generateHint(game, targetPlayerId) {
   const mafiaBase = 5 + 85 * progress;
   const peacefulBase = 5 + 45 * progress;
 
-  // С шансом 20% одному мирному даём "мафиозный" процент (для запутывания)
   const confuseIdx = (Math.random() < 0.2 && picked.length > 1)
     ? Math.floor(Math.random() * picked.length)
     : -1;
@@ -1263,7 +1247,6 @@ function generateHint(game, targetPlayerId) {
       percent = Math.round(mafiaBase + (Math.random() * 6 - 3));
       percent = Math.max(0, Math.min(100, percent));
     } else if (idx === confuseIdx) {
-      // Мирному даём мафиозный процент для запутывания
       percent = Math.round(mafiaBase + (Math.random() * 6 - 3));
       percent = Math.max(0, Math.min(100, percent));
     } else {
