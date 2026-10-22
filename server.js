@@ -93,12 +93,10 @@ function maxMafiaWithDon(n) {
   return 2;
 }
 
-// Считаем ТОЛЬКО мафий (без дона) — для лимита приглашений
 function aliveMafiaOnlyCount(game) {
   return game.players.filter(p => p.alive && p.role === 'mafia').length;
 }
 
-// Считаем мафий + дон — для проверки конца игры
 function aliveMafiaCount(game) {
   return game.players.filter(p => p.alive && (p.role === 'mafia' || p.role === 'don')).length;
 }
@@ -273,6 +271,14 @@ function broadcastNightState(roomId) {
       blockedMafiaAlone = others.length === 0;
     }
 
+    // Для заблокированного не-мафиози: может ли он нажать «Продолжить»
+    // (только если он единственный живой представитель своей роли)
+    let blockedCanPass = false;
+    if (isBlocked && p.role !== 'mafia' && p.role !== 'don') {
+      const sameRoleAlive = game.players.filter(x => x.alive && x.role === p.role && x.id !== p.id && !game.night.blocked.includes(x.id));
+      blockedCanPass = sameRoleAlive.length === 0;
+    }
+
     io.to(p.socketId).emit('nightState', {
       day: game.day,
       stepRole: step ? step.role : null,
@@ -284,6 +290,7 @@ function broadcastNightState(roomId) {
       alive: p.alive,
       blocked: isBlocked,
       blockedMafiaAlone,
+      blockedCanPass,
       doctorCanSelf,
       players: game.players.map(pp => ({
         id: pp.id, name: pp.name, alive: pp.alive, connected: !!pp.socketId,
@@ -383,12 +390,9 @@ function handleNightAction(roomId, playerId, payload) {
       if (!game.night.proposals.mafia_don) game.night.proposals.mafia_don = {};
       game.night.proposals.mafia_don[player.id] = { mode: 'invite', targetId: target.id };
 
-      // Особая роль — приглашение "уходит", но игрок его не получит.
-      // Дон узнает об отказе в СЛЕДУЮЩИЙ свой ход ночью (как будто игрок реально отказался).
       const isSpecialRole = UNRECRUITABLE.includes(target.role);
       if (isSpecialRole) {
         game.pendingDonFeedback = `Игрок ${target.name} отклонил приглашение`;
-        // pendingInvites не создаём — игрок ничего не увидит
       }
 
       broadcastNightState(roomId);
@@ -483,30 +487,58 @@ function handleNightAction(roomId, playerId, payload) {
   return { ok: true };
 }
 
+// ---- Пропуск хода заблокированным игроком ----
 function handleBlockedPass(roomId, playerId) {
   const game = games[roomId];
   if (!game || game.phase !== 'night') return { ok: false, error: 'Не ночь' };
 
   const player = game.players.find(p => p.id === playerId);
-  if (!player || !player.alive) return { ok: false };
+  if (!player || !player.alive) return { ok: false, error: 'Игрок недоступен' };
   if (!game.night.blocked.includes(player.id)) return { ok: false, error: 'Вы не заблокированы' };
 
+  // ---- Мафия / Дон ----
   if (player.role === 'mafia' || player.role === 'don') {
-    const others = game.players.filter(p => p.alive && p.id !== playerId && (p.role === 'mafia' || p.role === 'don'));
+    const others = game.players.filter(p =>
+      p.alive && p.id !== playerId && (p.role === 'mafia' || p.role === 'don') && !game.night.blocked.includes(p.id)
+    );
     if (others.length > 0) {
-      return { ok: false, error: 'Дождитесь коллег' };
+      return { ok: false, error: 'Дождитесь коллег по команде' };
     }
+    // Он единственный (живой не-заблокированный) — фиксируем пропуск
     if (!game.night.confirmed.mafia_don) game.night.confirmed.mafia_don = {};
     game.night.confirmed.mafia_don[player.id] = true;
-    tryAdvanceStep(roomId);
+    if (!game.night.actions.mafia_don) game.night.actions.mafia_don = {};
+    game.night.actions.mafia_don[player.id] = null;
+
+    // Если сейчас шаг мафии — двигаем
+    const step = game.night.steps[game.night.currentStepIndex];
+    if (step && step.role === 'mafia_don') {
+      tryAdvanceStep(roomId);
+    } else {
+      broadcastNightState(roomId);
+    }
     return { ok: true };
   }
 
+  // ---- Остальные роли ----
+  // Проверяем, есть ли другие живые не-заблокированные представители его роли
+  const sameRoleAlive = game.players.filter(p =>
+    p.alive && p.role === player.role && p.id !== player.id && !game.night.blocked.includes(p.id)
+  );
+  if (sameRoleAlive.length > 0) {
+    return { ok: false, error: 'Дождитесь коллег по роли' };
+  }
+
+  // Он единственный — фиксируем пропуск
+  if (!game.night.actions[player.role]) game.night.actions[player.role] = {};
+  game.night.actions[player.role][player.id] = null;
+
+  // Если сейчас шаг его роли — двигаем
   const step = game.night.steps[game.night.currentStepIndex];
   if (step && step.role === player.role) {
-    if (!game.night.actions[player.role]) game.night.actions[player.role] = {};
-    game.night.actions[player.role][player.id] = null;
     tryAdvanceStep(roomId);
+  } else {
+    broadcastNightState(roomId);
   }
   return { ok: true };
 }
@@ -530,17 +562,28 @@ function tryAdvanceStep(roomId) {
       p.alive && (p.role === 'mafia' || p.role === 'don') && !game.night.blocked.includes(p.id)
     );
 
-    const anyInvite = aliveTeam.some(p => actionsMap[p.id] && actionsMap[p.id].mode === 'invite');
+    // Если у кого-то пропуск (null) — считаем, что он не участвует в голосовании
+    const actualVoters = aliveTeam.filter(p => actionsMap[p.id] !== null);
+
+    const anyInvite = actualVoters.some(p => actionsMap[p.id] && actionsMap[p.id].mode === 'invite');
     if (anyInvite) {
       broadcastNightState(roomId);
       setTimeout(() => nextNightStep(roomId), 600);
       return;
     }
 
-    const killTargets = aliveTeam
+    const killTargets = actualVoters
       .filter(p => actionsMap[p.id] && actionsMap[p.id].mode === 'kill')
       .map(p => actionsMap[p.id].targetId);
-    if (killTargets.length && killTargets.every(t => t === killTargets[0])) {
+
+    if (killTargets.length === 0) {
+      // Все пропустили — жертвы нет
+      broadcastNightState(roomId);
+      setTimeout(() => nextNightStep(roomId), 600);
+      return;
+    }
+
+    if (killTargets.every(t => t === killTargets[0])) {
       broadcastNightState(roomId);
       setTimeout(() => nextNightStep(roomId), 600);
       return;
@@ -580,24 +623,25 @@ function finishNight(roomId) {
 
   const map = game.night.actions.mafia_don || {};
   const mafiaTeamAlive = game.players.filter(p => p.alive && (p.role === 'mafia' || p.role === 'don'));
-  const anyInvite = mafiaTeamAlive.some(p => map[p.id] && map[p.id].mode === 'invite');
+  const actualVoters = mafiaTeamAlive.filter(p => map[p.id] !== null && map[p.id] !== undefined);
+  const anyInvite = actualVoters.some(p => map[p.id] && map[p.id].mode === 'invite');
   let mafiaVictim = null;
 
   if (anyInvite) {
-    const inviter = mafiaTeamAlive.find(p => map[p.id] && map[p.id].mode === 'invite');
+    const inviter = actualVoters.find(p => map[p.id] && map[p.id].mode === 'invite');
     if (inviter) {
       const tId = map[inviter.id].targetId;
       const target = game.players.find(p => p.id === tId);
       journal.push(`Дон пригласил: ${target ? target.name : '?'}`);
     }
   } else {
-    const killTargets = mafiaTeamAlive
+    const killTargets = actualVoters
       .filter(p => map[p.id] && map[p.id].mode === 'kill')
       .map(p => map[p.id].targetId);
     if (killTargets.length && killTargets.every(t => t === killTargets[0])) {
       mafiaVictim = killTargets[0];
       journal.push(`Мафия единогласно выбрала: ${nameOf(game, mafiaVictim)}`);
-    } else if (mafiaTeamAlive.length) {
+    } else if (actualVoters.length) {
       journal.push(`Мафия НЕ договорилась — жертвы нет`);
     }
   }
@@ -678,12 +722,11 @@ function finishNight(roomId) {
 
   let pendingInvite = null;
   if (anyInvite) {
-    const inviter = mafiaTeamAlive.find(p => map[p.id] && map[p.id].mode === 'invite');
+    const inviter = actualVoters.find(p => map[p.id] && map[p.id].mode === 'invite');
     if (inviter) {
       const tId = map[inviter.id].targetId;
       const target = game.players.find(p => p.id === tId && p.alive);
       if (target && !UNRECRUITABLE.includes(target.role)) {
-        // Особая роль — приглашение не создаётся, игрок о нём не узнает.
         pendingInvite = {
           targetId: target.id,
           targetName: target.name,
