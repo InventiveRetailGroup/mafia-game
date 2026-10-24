@@ -68,15 +68,12 @@
     border-radius: 10px; cursor: pointer;
     font-family: inherit; letter-spacing: 1px;
     transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
-    position: relative;
-    overflow: hidden;
+    position: relative; overflow: hidden;
   }
   button::after {
-    content: '';
-    position: absolute; inset: 0;
+    content: ''; position: absolute; inset: 0;
     background: radial-gradient(circle at center, rgba(255,255,255,0.35), transparent 60%);
-    opacity: 0; transition: opacity 0.25s;
-    pointer-events: none;
+    opacity: 0; transition: opacity 0.25s; pointer-events: none;
   }
   button:hover:not(:disabled) { background: var(--accent-2); box-shadow: 0 4px 16px rgba(37,99,235,0.4); }
   button:hover:not(:disabled)::after { opacity: 1; }
@@ -96,33 +93,70 @@
     position: fixed; top: 16px; right: 16px;
     width: 52px; height: 52px; border-radius: 12px;
     background: var(--card); border: 2px solid var(--accent);
-    color: var(--accent); font-size: 24px; padding: 0;
+    color: var(--accent);
+    padding: 0;
     display: none; align-items: center; justify-content: center;
     box-shadow: 0 4px 12px rgba(0,0,0,0.35);
     z-index: 50; cursor: pointer;
-    font-weight: 700;
+    font-weight: 800; font-size: 26px;
     transition: transform 0.15s, box-shadow 0.2s, background 0.2s;
     animation: fadeInScale 0.3s ease-out;
   }
   #roleBtn:hover { transform: scale(1.06); box-shadow: 0 6px 20px rgba(37,99,235,0.45); }
   #roleBtn:active { transform: scale(0.95); }
-  #roleBtn::after { content: 'Р'; font-size: 24px; color: var(--accent); }
 
+  #inviteBtn {
+    position: fixed; top: 16px; right: 80px;
+    width: 52px; height: 52px; border-radius: 12px;
+    background: #16a34a; border: 2px solid #15803d;
+    color: #fff;
+    padding: 0;
+    display: none; align-items: center; justify-content: center;
+    box-shadow: 0 4px 12px rgba(22,163,74,0.45);
+    z-index: 50; cursor: pointer;
+    font-size: 24px; font-weight: 700;
+    transition: transform 0.15s, box-shadow 0.2s, background 0.2s;
+    animation: invitePulse 1.4s ease-in-out infinite;
+  }
+  #inviteBtn:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(22,163,74,0.6); }
+  #inviteBtn:active { transform: scale(0.95); }
+
+  #abilityBtn {
+    position: fixed; top: 16px; right: 144px;
+    width: 52px; height: 52px; border-radius: 12px;
+    background: #2563eb; border: 2px solid #1d4ed8;
+    color: #fff;
+    padding: 0;
+    display: none; align-items: center; justify-content: center;
+    box-shadow: 0 4px 12px rgba(37,99,235,0.45);
+    z-index: 50; cursor: pointer;
+    font-size: 24px; font-weight: 800;
+    transition: transform 0.15s, box-shadow 0.2s, background 0.2s;
+    animation: invitePulse 1.4s ease-in-out infinite;
+  }
+  #abilityBtn:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(37,99,235,0.65); }
+  #abilityBtn:active { transform: scale(0.95); }
+
+  @keyframes invitePulse {
+    0%, 100% { box-shadow: 0 4px 12px rgba(22,163,74,0.45); }
+    50% { box-shadow: 0 4px 20px rgba(22,163,74,0.85); }
+  }
   @keyframes fadeInScale {
     from { opacity: 0; transform: scale(0.6); }
     to { opacity: 1; transform: scale(1); }
   }
 
-  #roleModal, #resultModal, #peekModal, #inviteModal, #hintResultModal {
+  #roleModal, #resultModal, #peekModal, #inviteModal, #hintResultModal, #gameEndModal,
+  #mayorModal, #bodyguardModal {
     position: fixed; inset: 0;
     background: rgba(15, 31, 74, 0.85);
     display: none; align-items: center; justify-content: center;
     padding: 20px; z-index: 100; overflow-y: auto;
     backdrop-filter: blur(2px);
   }
-  #roleModal.open, #resultModal.open, #peekModal.open, #inviteModal.open, #hintResultModal.open {
-    display: flex;
-    animation: fadeIn 0.2s ease-out;
+  #roleModal.open, #resultModal.open, #peekModal.open, #inviteModal.open,
+  #hintResultModal.open, #gameEndModal.open, #mayorModal.open, #bodyguardModal.open {
+    display: flex; animation: fadeIn 0.2s ease-out;
   }
   @keyframes fadeIn {
     from { opacity: 0; }
@@ -144,14 +178,10 @@
   .role-top {
     padding: 18px 20px; background: var(--bg-2);
     color: #ffffff; text-align: center;
-    flex-shrink: 0;
-    position: relative;
-    overflow: hidden;
+    flex-shrink: 0; position: relative; overflow: hidden;
   }
   .role-top::before {
-    content: '';
-    position: absolute;
-    top: -50%; left: -50%;
+    content: ''; position: absolute; top: -50%; left: -50%;
     width: 200%; height: 200%;
     background: linear-gradient(45deg, transparent, rgba(255,255,255,0.08), transparent);
     animation: shimmer 3s infinite;
@@ -165,31 +195,24 @@
     font-size: 28px; font-weight: 800; margin-top: 4px; letter-spacing: 2px;
     position: relative;
   }
-  .role-title.mafia, .role-title.don, .role-title.maniac { color: #fca5a5; }
-  .role-title.sheriff, .role-title.journalist { color: #bfdbfe; }
+  .role-title.mafia, .role-title.don, .role-title.maniac, .role-title.rebel { color: #fca5a5; }
+  .role-title.sheriff, .role-title.journalist, .role-title.mayor, .role-title.bodyguard { color: #bfdbfe; }
   .role-title.doctor { color: #bbf7d0; }
   .role-title.citizen { color: #fef3c7; }
   .role-title.beauty { color: #fbcfe8; }
   .role-title.unknown { color: #e0e7ff; }
 
   .role-portrait {
-    height: auto;
-    max-height: 50vh;
-    min-height: 200px;
+    height: auto; max-height: 50vh; min-height: 200px;
     background: linear-gradient(180deg, #dbeafe, #bfdbfe);
     display: flex; align-items: center; justify-content: center;
-    border-top: 1px solid var(--line);
-    border-bottom: 1px solid var(--line);
-    overflow: hidden;
-    flex-shrink: 0;
+    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    overflow: hidden; flex-shrink: 0;
   }
   .role-portrait img {
-    max-width: 100%;
-    max-height: 50vh;
-    width: auto;
-    height: auto;
-    object-fit: contain;
-    display: block;
+    max-width: 100%; max-height: 50vh;
+    width: auto; height: auto;
+    object-fit: contain; display: block;
     animation: fadeIn 0.35s ease-out;
   }
   .role-portrait .placeholder {
@@ -203,28 +226,20 @@
   }
   .role-desc b { color: var(--accent); }
   .role-section {
-    text-align: left;
-    margin-top: 8px;
-    padding: 12px 14px;
-    background: var(--card-2);
-    border-radius: 10px;
-    font-size: 14px;
-    line-height: 1.5;
+    text-align: left; margin-top: 8px;
+    padding: 12px 14px; background: var(--card-2);
+    border-radius: 10px; font-size: 14px; line-height: 1.5;
     animation: fadeInUp 0.4s ease-out backwards;
   }
   .role-section:nth-child(2) { animation-delay: 0.1s; }
   .role-section .role-section-title {
-    display: block;
-    font-size: 12px;
-    letter-spacing: 2px;
-    color: var(--ink-soft);
-    margin-bottom: 6px;
+    display: block; font-size: 12px; letter-spacing: 2px;
+    color: var(--ink-soft); margin-bottom: 6px;
   }
 
   .modal-close {
     margin: 0 20px 20px; background: var(--bg-2);
-    width: calc(100% - 40px);
-    flex-shrink: 0;
+    width: calc(100% - 40px); flex-shrink: 0;
     transition: background 0.2s, transform 0.1s;
   }
   .modal-close:hover { background: var(--bg-3); }
@@ -233,8 +248,7 @@
   #content {
     flex: 1; display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    width: 100%;
-    padding-top: 20px;
+    width: 100%; padding-top: 20px;
   }
 
   #nightScreen, #dayScreen {
@@ -258,8 +272,7 @@
     background: var(--card-2); border: 2px solid var(--line);
     border-radius: 10px; cursor: pointer;
     display: flex; justify-content: space-between; align-items: center;
-    gap: 8px;
-    color: var(--ink);
+    gap: 8px; color: var(--ink);
     transition: background 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
     animation: fadeInUp 0.3s ease-out backwards;
   }
@@ -273,24 +286,14 @@
   ul.targets li.target:nth-child(8) { animation-delay: 0.16s; }
   ul.targets li.target:hover { background: #eff6ff; border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,0.15); }
   ul.targets li.target:active { transform: scale(0.98); }
-  ul.targets li.target.selected {
-    background: #93c5fd;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(37,99,235,0.2);
-  }
+  ul.targets li.target.selected { background: #93c5fd; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.2); }
   ul.targets li.target.dead {
-    opacity: 0.55;
-    background: #94a3b8;
-    color: #ffffff;
-    text-decoration: none;
-    cursor: default;
-    border-color: #64748b;
+    opacity: 0.55; background: #94a3b8; color: #ffffff;
+    text-decoration: none; cursor: default; border-color: #64748b;
   }
   ul.targets li.target.dead:hover { background: #94a3b8; border-color: #64748b; transform: none; box-shadow: none; }
   ul.targets li.target.immune { border-color: #fbcfe8; background: #fce7f3; }
-  .vote-dots {
-    display: inline-flex; gap: 3px; margin-left: 8px;
-  }
+  .vote-dots { display: inline-flex; gap: 3px; margin-left: 8px; }
   .vote-dots .d {
     width: 10px; height: 10px; border-radius: 50%; background: #dc2626;
     animation: dotPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -300,39 +303,21 @@
     from { transform: scale(0); }
     to { transform: scale(1); }
   }
-  .tie-info {
-    text-align: center; color: var(--ink-soft);
-    font-size: 13px; margin-top: 8px;
-  }
-  .mode-switch {
-    display: flex; gap: 8px; margin-bottom: 12px;
-  }
-  .mode-switch button {
-    flex: 1; padding: 10px; font-size: 14px;
-    background: var(--bg-2);
-  }
+  .tie-info { text-align: center; color: var(--ink-soft); font-size: 13px; margin-top: 8px; }
+  .mode-switch { display: flex; gap: 8px; margin-bottom: 12px; }
+  .mode-switch button { flex: 1; padding: 10px; font-size: 14px; background: var(--bg-2); }
   .mode-switch button.active { background: var(--accent); }
-  .recruits-left {
-    text-align: center; color: var(--ink-soft);
-    font-size: 13px; margin-bottom: 8px;
-  }
-  .invite-actions {
-    display: flex; gap: 8px; padding: 0 20px 20px;
-  }
+  .recruits-left { text-align: center; color: var(--ink-soft); font-size: 13px; margin-bottom: 8px; }
+  .invite-actions { display: flex; gap: 8px; padding: 0 20px 20px; }
   .invite-actions button { padding: 14px; }
   .invite-actions button.accept { background: #16a34a; }
   .invite-actions button.accept:hover { background: #22c55e; }
   .invite-actions button.reject { background: #dc2626; }
   .invite-actions button.reject:hover { background: #ef4444; }
   .blocked-note {
-    background: #fce7f3;
-    border: 1px solid #fbcfe8;
-    border-radius: 10px;
-    padding: 14px;
-    text-align: center;
-    color: #831843;
-    font-size: 14px;
-    margin-bottom: 12px;
+    background: #fce7f3; border: 1px solid #fbcfe8;
+    border-radius: 10px; padding: 14px; text-align: center;
+    color: #831843; font-size: 14px; margin-bottom: 12px;
     animation: shake 0.5s ease-out;
   }
   @keyframes shake {
@@ -341,14 +326,9 @@
     75% { transform: translateX(4px); }
   }
   .feedback-note {
-    background: #fef3c7;
-    border: 1px solid #fde68a;
-    border-radius: 10px;
-    padding: 12px;
-    text-align: center;
-    color: #78350f;
-    font-size: 14px;
-    margin-bottom: 12px;
+    background: #fef3c7; border: 1px solid #fde68a;
+    border-radius: 10px; padding: 12px; text-align: center;
+    color: #78350f; font-size: 14px; margin-bottom: 12px;
     animation: fadeInUp 0.3s ease-out;
   }
   .hint-list { padding: 0 20px; }
@@ -362,35 +342,26 @@
   .hint-list li:nth-child(1) { animation-delay: 0.05s; }
   .hint-list li:nth-child(2) { animation-delay: 0.1s; }
   .hint-list li:nth-child(3) { animation-delay: 0.15s; }
-  .hint-percent {
-    font-weight: 800; font-size: 18px; color: #b91c1c;
-  }
+  .hint-percent { font-weight: 800; font-size: 18px; color: #b91c1c; }
 
   #rolesBtn {
-    width: auto;
-    padding: 10px 20px;
-    font-size: 14px;
-    background: var(--bg-2);
-    margin-top: 12px;
-    display: inline-block;
+    width: auto; padding: 10px 20px; font-size: 14px;
+    background: var(--bg-2); margin-top: 12px; display: inline-block;
   }
   #rolesBtn:hover:not(:disabled) { background: var(--bg-3); }
 
   #rolesGalleryModal {
     position: fixed; inset: 0;
     background: rgba(15, 31, 74, 0.92);
-    display: none;
-    z-index: 150;
-    padding: 24px 16px;
-    overflow-y: auto;
+    display: none; z-index: 150;
+    padding: 24px 16px; overflow-y: auto;
     backdrop-filter: blur(2px);
   }
   #rolesGalleryModal.open { display: block; animation: fadeIn 0.25s ease-out; }
   .gallery-header {
     max-width: 1100px; margin: 0 auto 20px;
     display: flex; justify-content: space-between; align-items: center;
-    color: #ffffff;
-    animation: fadeInUp 0.3s ease-out;
+    color: #ffffff; animation: fadeInUp 0.3s ease-out;
   }
   .gallery-header h2 { margin: 0; font-size: 22px; }
   .gallery-close {
@@ -403,16 +374,12 @@
   .gallery-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 16px;
-    max-width: 1100px; margin: 0 auto;
+    gap: 16px; max-width: 1100px; margin: 0 auto;
   }
   .gallery-card {
-    background: var(--card);
-    border-radius: 14px;
-    overflow: hidden;
+    background: var(--card); border-radius: 14px; overflow: hidden;
     border: 2px solid var(--accent);
-    cursor: pointer;
-    display: flex; flex-direction: column;
+    cursor: pointer; display: flex; flex-direction: column;
     color: var(--ink);
     transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
     animation: fadeInScale 0.3s ease-out backwards;
@@ -426,25 +393,20 @@
   .gallery-card:nth-child(7) { animation-delay: 0.20s; }
   .gallery-card:nth-child(8) { animation-delay: 0.23s; }
   .gallery-card:nth-child(9) { animation-delay: 0.26s; }
-  .gallery-card:hover {
-    transform: scale(1.04) translateY(-2px);
-    box-shadow: 0 10px 28px rgba(37,99,235,0.35);
-  }
+  .gallery-card:nth-child(10) { animation-delay: 0.29s; }
+  .gallery-card:nth-child(11) { animation-delay: 0.32s; }
+  .gallery-card:nth-child(12) { animation-delay: 0.35s; }
+  .gallery-card:hover { transform: scale(1.04) translateY(-2px); box-shadow: 0 10px 28px rgba(37,99,235,0.35); }
   .gallery-card:active { transform: scale(0.98); }
   .gallery-card .gallery-card-title {
-    background: var(--bg-2);
-    color: #ffffff;
-    text-align: center;
-    padding: 10px 8px;
-    font-size: 14px;
-    font-weight: 700;
-    letter-spacing: 1px;
+    background: var(--bg-2); color: #ffffff;
+    text-align: center; padding: 10px 8px;
+    font-size: 14px; font-weight: 700; letter-spacing: 1px;
   }
   .gallery-card .gallery-card-image {
     aspect-ratio: 2 / 3;
     background: linear-gradient(180deg, #dbeafe, #bfdbfe);
-    overflow: hidden;
-    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; display: flex; align-items: center; justify-content: center;
   }
   .gallery-card .gallery-card-image img {
     width: 100%; height: 100%; object-fit: cover; display: block;
@@ -455,113 +417,149 @@
     color: var(--ink-soft); font-size: 14px; padding: 10px; text-align: center;
   }
   .gallery-card .gallery-card-btn {
-    width: 100%;
-    border-radius: 0;
-    background: var(--accent);
-    padding: 12px;
-    font-size: 13px;
+    width: 100%; border-radius: 0;
+    background: var(--accent); padding: 12px; font-size: 13px;
   }
 
   #roleExpandedModal {
     position: fixed; inset: 0;
     background: rgba(15, 31, 74, 0.96);
-    display: none;
-    align-items: center; justify-content: center;
-    padding: 20px;
-    z-index: 160;
-    overflow-y: auto;
+    display: none; align-items: center; justify-content: center;
+    padding: 20px; z-index: 160; overflow-y: auto;
     backdrop-filter: blur(2px);
   }
   #roleExpandedModal.open { display: flex; animation: fadeIn 0.2s ease-out; }
   .expanded-card {
-    background: var(--card);
-    border-radius: 18px;
-    width: 100%; max-width: 560px;
-    overflow: hidden;
-    border: 2px solid var(--accent);
-    color: var(--ink);
+    background: var(--card); border-radius: 18px;
+    width: 100%; max-width: 560px; overflow: hidden;
+    border: 2px solid var(--accent); color: var(--ink);
     animation: expandCard 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-    max-height: 92vh;
-    display: flex; flex-direction: column;
+    max-height: 92vh; display: flex; flex-direction: column;
   }
   @keyframes expandCard {
     from { transform: scale(0.4); opacity: 0; }
     to { transform: scale(1); opacity: 1; }
   }
   .expanded-card .expanded-title {
-    background: var(--bg-2);
-    color: #ffffff;
-    text-align: center;
-    padding: 18px 20px;
-    font-size: 24px;
-    font-weight: 800;
-    letter-spacing: 2px;
-    flex-shrink: 0;
-    animation: fadeIn 0.4s ease-out;
+    background: var(--bg-2); color: #ffffff;
+    text-align: center; padding: 18px 20px;
+    font-size: 24px; font-weight: 800; letter-spacing: 2px;
+    flex-shrink: 0; animation: fadeIn 0.4s ease-out;
   }
   .expanded-card .expanded-image {
-    height: auto;
-    max-height: 50vh;
-    min-height: 200px;
+    height: auto; max-height: 50vh; min-height: 200px;
     background: linear-gradient(180deg, #dbeafe, #bfdbfe);
-    border-top: 1px solid var(--line);
-    border-bottom: 1px solid var(--line);
-    overflow: hidden;
-    flex-shrink: 0;
+    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    overflow: hidden; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
   }
   .expanded-card .expanded-image img {
-    max-width: 100%;
-    max-height: 50vh;
-    width: auto;
-    height: auto;
-    object-fit: contain;
-    display: block;
+    max-width: 100%; max-height: 50vh;
+    width: auto; height: auto;
+    object-fit: contain; display: block;
     animation: fadeIn 0.45s ease-out;
   }
   .expanded-card .expanded-image .placeholder {
     color: var(--ink-soft); font-size: 16px; text-align: center; padding: 20px;
   }
   .expanded-card .expanded-body {
-    padding: 18px 22px;
-    overflow-y: auto;
-    flex: 1;
+    padding: 18px 22px; overflow-y: auto; flex: 1;
     animation: fadeInUp 0.45s ease-out;
   }
   .expanded-card .expanded-body .expanded-desc {
-    font-size: 15px;
-    line-height: 1.55;
-    margin-bottom: 14px;
+    font-size: 15px; line-height: 1.55; margin-bottom: 14px;
   }
   .expanded-card .expanded-body .expanded-features {
-    background: var(--card-2);
-    border-radius: 10px;
-    padding: 12px 14px;
-    font-size: 14px;
-    line-height: 1.5;
+    background: var(--card-2); border-radius: 10px;
+    padding: 12px 14px; font-size: 14px; line-height: 1.5;
   }
   .expanded-card .expanded-body .expanded-features .role-section-title {
-    display: block;
-    font-size: 12px;
-    letter-spacing: 2px;
-    color: var(--ink-soft);
-    margin-bottom: 6px;
+    display: block; font-size: 12px; letter-spacing: 2px;
+    color: var(--ink-soft); margin-bottom: 6px;
   }
   .expanded-card .expanded-close {
-    width: calc(100% - 40px);
-    margin: 0 20px 20px;
-    background: var(--bg-2);
-    padding: 14px;
+    width: calc(100% - 40px); margin: 0 20px 20px;
+    background: var(--bg-2); padding: 14px;
     flex-shrink: 0;
     transition: background 0.2s, transform 0.1s;
   }
   .expanded-card .expanded-close:hover { background: var(--bg-3); }
   .expanded-card .expanded-close:active { transform: scale(0.97); }
+
+  #gameEndModal .game-end-card {
+    background: var(--card);
+    border-radius: 18px;
+    width: 100%; max-width: 520px;
+    overflow: hidden;
+    border: 2px solid var(--accent);
+    color: var(--ink);
+    animation: pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    max-height: 92vh; display: flex; flex-direction: column;
+  }
+  .game-end-title {
+    background: var(--bg-2);
+    color: #ffffff;
+    text-align: center;
+    padding: 20px;
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 1px;
+  }
+  .game-end-sub {
+    text-align: center;
+    padding: 12px 20px;
+    font-size: 14px;
+    color: var(--ink-soft);
+    background: var(--card-2);
+    border-bottom: 1px solid var(--line);
+  }
+  .game-end-roles {
+    list-style: none; padding: 12px 20px;
+    margin: 0; overflow-y: auto; flex: 1;
+  }
+  .game-end-roles li {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 14px; margin-bottom: 8px;
+    border-radius: 10px; gap: 8px;
+    background: var(--card-2); color: var(--ink);
+    border-left: 4px solid transparent;
+    animation: fadeInUp 0.3s ease-out backwards;
+  }
+  .game-end-roles li.role-mafia, .game-end-roles li.role-don, .game-end-roles li.role-maniac, .game-end-roles li.role-rebel {
+    background: #fecaca; color: #7f1d1d; border-left-color: #7f1d1d;
+  }
+  .game-end-roles li.role-sheriff, .game-end-roles li.role-doctor,
+  .game-end-roles li.role-beauty, .game-end-roles li.role-journalist,
+  .game-end-roles li.role-mayor, .game-end-roles li.role-bodyguard {
+    background: #bfdbfe; color: #1e3a8a; border-left-color: #1e3a8a;
+  }
+  .game-end-roles li.role-citizen {
+    background: #bbf7d0; color: #14532d; border-left-color: #14532d;
+  }
+  .game-end-roles li .role-tag {
+    font-size: 12px; font-weight: 700; letter-spacing: 1px;
+  }
+  .game-end-btn {
+    margin: 0 20px 20px;
+    width: calc(100% - 40px);
+    background: var(--bg-2);
+  }
+  .game-end-btn:hover { background: var(--bg-3); }
+
+  #mayorModal .role-card, #bodyguardModal .role-card { max-width: 420px; }
+  .modal-buttons {
+    display: flex; gap: 8px; padding: 0 20px 20px;
+  }
+  .modal-buttons button { flex: 1; padding: 14px; }
+  .modal-buttons button.cancel { background: #64748b; }
+  .modal-buttons button.cancel:hover { background: #788599; }
 </style>
 </head>
 <body>
 
-  <button id="roleBtn" aria-label="Показать роль"></button>
+  <button id="roleBtn" aria-label="Показать роль">Р</button>
+  <button id="inviteBtn" aria-label="Приглашение">✉</button>
+  <button id="abilityBtn" aria-label="Способность">С</button>
 
   <div id="content">
     <div class="card" id="joinScreen">
@@ -605,8 +603,12 @@
         <div id="recruitsLeftBox" class="recruits-left" style="display:none;"></div>
         <div class="sub" id="nightInstruction"></div>
         <ul id="nightTargets" class="targets"></ul>
+        <button id="doctorSelfBtn" style="display:none; margin-top:8px; background:#16a34a;">Выбрать себя</button>
+        <button id="mafiaConfirmBtn" style="display:none; margin-top:8px;">Подтвердить выбор</button>
         <button id="nightConfirmBtn" style="display:none; margin-top:12px;">Подтвердить</button>
       </div>
+
+      <button id="blockedContinueBtn" style="display:none; margin-top:12px; background:#16a34a;">Продолжить</button>
     </div>
   </div>
 
@@ -617,6 +619,10 @@
 
       <div id="revoteNote" class="feedback-note" style="display:none;">
         Переголосование: голосуйте только за кандидатов
+      </div>
+
+      <div id="mayorVetoNote" class="feedback-note" style="display:none; background:#dbeafe; border-color:#93c5fd; color:#1e3a8a;">
+        Мер отменил голосование.
       </div>
 
       <div id="dayActionArea" style="display:none;">
@@ -697,6 +703,15 @@
     </div>
   </div>
 
+  <div id="gameEndModal">
+    <div class="game-end-card">
+      <div class="game-end-title" id="gameEndTitle">—</div>
+      <div class="game-end-sub" id="gameEndSub">Кто кем был в этой игре</div>
+      <ul class="game-end-roles" id="gameEndRoles"></ul>
+      <button class="game-end-btn" id="gameEndBtn">Вернуться в меню</button>
+    </div>
+  </div>
+
   <div id="rolesGalleryModal">
     <div class="gallery-header">
       <h2>Роли в игре</h2>
@@ -720,6 +735,39 @@
     </div>
   </div>
 
+  <div id="mayorModal">
+    <div class="role-card">
+      <div class="role-top">
+        <div class="role-label">СПОСОБНОСТЬ МЕРА</div>
+        <div class="role-title" style="font-size:20px;">Отменить сегодняшнее голосование?</div>
+      </div>
+      <div class="role-desc" style="padding: 18px 22px 0;">
+        Голосование будет полностью отменено, никто не будет казнён. Способность можно использовать только один раз за игру.
+      </div>
+      <div class="modal-buttons" style="margin-top: 14px;">
+        <button class="cancel" id="mayorCancel">Нет</button>
+        <button id="mayorConfirm" style="background:#dc2626;">Да, отменить</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="bodyguardModal">
+    <div class="role-card">
+      <div class="role-top">
+        <div class="role-label">СПОСОБНОСТЬ ТЕЛОХРАНИТЕЛЯ</div>
+        <div class="role-title" style="font-size:20px;">Кого спасти?</div>
+      </div>
+      <div class="role-desc" style="padding: 14px 22px 0;">
+        Выбранный игрок выживет, если его казнят сегодня. Способность тратится сразу.
+      </div>
+      <ul id="bodyguardTargets" style="list-style: none; padding: 14px 20px; margin: 0; max-height: 50vh; overflow-y: auto;">
+      </ul>
+      <div class="modal-buttons">
+        <button class="cancel" id="bodyguardCancel">Отмена</button>
+      </div>
+    </div>
+  </div>
+
 <script>
   const socket = io();
   const ROLES = window.ROLE_INFO;
@@ -732,6 +780,8 @@
   const errorMsg = document.getElementById('errorMsg');
   const roomLabel = document.getElementById('roomLabel');
   const roleBtn = document.getElementById('roleBtn');
+  const inviteBtn = document.getElementById('inviteBtn');
+  const abilityBtn = document.getElementById('abilityBtn');
   const roleModal = document.getElementById('roleModal');
   const roleTitle = document.getElementById('roleTitle');
   const rolePortrait = document.getElementById('rolePortrait');
@@ -758,6 +808,12 @@
   const hintList = document.getElementById('hintList');
   const hintClose = document.getElementById('hintClose');
 
+  const gameEndModal = document.getElementById('gameEndModal');
+  const gameEndTitle = document.getElementById('gameEndTitle');
+  const gameEndSub = document.getElementById('gameEndSub');
+  const gameEndRoles = document.getElementById('gameEndRoles');
+  const gameEndBtn = document.getElementById('gameEndBtn');
+
   const nightScreen = document.getElementById('nightScreen');
   const nightDay = document.getElementById('nightDay');
   const nightSub = document.getElementById('nightSub');
@@ -766,6 +822,9 @@
   const nightInstruction = document.getElementById('nightInstruction');
   const nightTargets = document.getElementById('nightTargets');
   const nightConfirmBtn = document.getElementById('nightConfirmBtn');
+  const doctorSelfBtn = document.getElementById('doctorSelfBtn');
+  const mafiaConfirmBtn = document.getElementById('mafiaConfirmBtn');
+  const blockedContinueBtn = document.getElementById('blockedContinueBtn');
   const donModeSwitch = document.getElementById('donModeSwitch');
   const modeKill = document.getElementById('modeKill');
   const modeInvite = document.getElementById('modeInvite');
@@ -782,6 +841,7 @@
   const clearVoteBtn = document.getElementById('clearVoteBtn');
   const dayDeadNote = document.getElementById('dayDeadNote');
   const revoteNote = document.getElementById('revoteNote');
+  const mayorVetoNote = document.getElementById('mayorVetoNote');
 
   const rolesBtn = document.getElementById('rolesBtn');
   const rolesGalleryModal = document.getElementById('rolesGalleryModal');
@@ -794,6 +854,14 @@
   const expandedFeatures = document.getElementById('expandedFeatures');
   const expandedCloseBtn = document.getElementById('expandedCloseBtn');
 
+  const mayorModal = document.getElementById('mayorModal');
+  const mayorCancel = document.getElementById('mayorCancel');
+  const mayorConfirm = document.getElementById('mayorConfirm');
+
+  const bodyguardModal = document.getElementById('bodyguardModal');
+  const bodyguardTargets = document.getElementById('bodyguardTargets');
+  const bodyguardCancel = document.getElementById('bodyguardCancel');
+
   let roomId = null, playerToken = null, playerName = null, myRole = null, myId = null;
   let nightData = null;
   let nightInterval = null;
@@ -802,6 +870,9 @@
   let dayData = null;
   let myVote = null;
   let donMode = 'kill';
+  let gameEnded = false;
+  let canMayorVeto = false;
+  let canBodyguardSave = false;
 
   function showScreen(el) {
     [joinScreen, waitScreen].forEach(s => s.style.display = 'none');
@@ -832,9 +903,27 @@
     }
   }
 
+  function setRoleCard(role, image) {
+    const data = ROLES[role];
+    if (!data) return;
+    roleTitle.textContent = data.label;
+    roleTitle.className = 'role-title ' + role;
+    setPortrait(rolePortrait, image, data.label);
+
+    roleDesc.innerHTML = '';
+    const descBlock = document.createElement('div');
+    descBlock.className = 'role-section';
+    descBlock.innerHTML = `<span class="role-section-title">ОПИСАНИЕ</span>${escapeHtml(data.description || '')}`;
+    const featBlock = document.createElement('div');
+    featBlock.className = 'role-section';
+    featBlock.innerHTML = `<span class="role-section-title">ОСОБЕННОСТИ</span>${escapeHtml(data.features || '')}`;
+    roleDesc.appendChild(descBlock);
+    roleDesc.appendChild(featBlock);
+  }
+
   function buildGallery() {
     galleryGrid.innerHTML = '';
-    const order = ['citizen', 'mafia', 'don', 'sheriff', 'doctor', 'maniac', 'beauty', 'journalist', 'unknown'];
+    const order = ['citizen', 'mafia', 'don', 'rebel', 'sheriff', 'doctor', 'mayor', 'bodyguard', 'maniac', 'beauty', 'journalist', 'unknown'];
     order.forEach(role => {
       const info = ROLES[role];
       if (!info) return;
@@ -938,6 +1027,7 @@
       playerToken = res.playerToken;
       playerName = name;
       myId = res.playerId;
+      gameEnded = false;
       localStorage.setItem('mafia_player', JSON.stringify({ name, room: code, token: playerToken }));
       roomLabel.textContent = code;
       showScreen(waitScreen);
@@ -948,24 +1038,16 @@
   socket.on('yourRole', ({ role, name, image }) => {
     myRole = role;
     if (name) { playerName = name; }
-    const data = ROLES[role];
-    if (!data) return;
-    roleTitle.textContent = data.label;
-    roleTitle.className = 'role-title ' + role;
-    setPortrait(rolePortrait, image, data.label);
-
-    roleDesc.innerHTML = '';
-    const descBlock = document.createElement('div');
-    descBlock.className = 'role-section';
-    descBlock.innerHTML = `<span class="role-section-title">ОПИСАНИЕ</span>${escapeHtml(data.description || '')}`;
-    const featBlock = document.createElement('div');
-    featBlock.className = 'role-section';
-    featBlock.innerHTML = `<span class="role-section-title">ОСОБЕННОСТИ</span>${escapeHtml(data.features || '')}`;
-    roleDesc.appendChild(descBlock);
-    roleDesc.appendChild(featBlock);
-
+    setRoleCard(role, image);
     roleBtn.style.display = 'flex';
     openModal();
+  });
+
+  socket.on('roleReconnect', ({ role, name, image }) => {
+    myRole = role;
+    if (name) { playerName = name; }
+    setRoleCard(role, image);
+    roleBtn.style.display = 'flex';
   });
 
   function openModal()  { roleModal.classList.add('open'); }
@@ -978,8 +1060,58 @@
   peekClose.addEventListener('click', () => peekModal.classList.remove('open'));
   peekModal.addEventListener('click', (e) => { if (e.target === peekModal) peekModal.classList.remove('open'); });
 
+  inviteBtn.addEventListener('click', () => {
+    inviteModal.classList.add('open');
+  });
+
+  // Кнопка способности — для мера и телохранителя
+  abilityBtn.addEventListener('click', () => {
+    if (myRole === 'mayor') {
+      mayorModal.classList.add('open');
+    } else if (myRole === 'bodyguard') {
+      openBodyguardPicker();
+    }
+  });
+
+  mayorCancel.addEventListener('click', () => mayorModal.classList.remove('open'));
+  mayorConfirm.addEventListener('click', () => {
+    socket.emit('mayorVeto', { roomId }, (res) => {
+      if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
+      else {
+        mayorModal.classList.remove('open');
+        abilityBtn.style.display = 'none';
+        canMayorVeto = false;
+      }
+    });
+  });
+
+  function openBodyguardPicker() {
+    if (!dayData || !dayData.players) return;
+    bodyguardTargets.innerHTML = '';
+    dayData.players.forEach(p => {
+      if (!p.alive) return;
+      if (p.id === myId) return;
+      const li = document.createElement('li');
+      li.className = 'target';
+      li.textContent = p.name;
+      li.onclick = () => {
+        socket.emit('bodyguardSave', { roomId, targetId: p.id }, (res) => {
+          if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
+          else {
+            bodyguardModal.classList.remove('open');
+            abilityBtn.style.display = 'none';
+            canBodyguardSave = false;
+          }
+        });
+      };
+      bodyguardTargets.appendChild(li);
+    });
+    bodyguardModal.classList.add('open');
+  }
+  bodyguardCancel.addEventListener('click', () => bodyguardModal.classList.remove('open'));
+
   socket.on('connect', () => {
-    if (roomId && playerToken) {
+    if (roomId && playerToken && !gameEnded) {
       socket.emit('joinGame', { roomId, name: playerName, playerToken }, () => {});
     }
   });
@@ -989,11 +1121,33 @@
     location.reload();
   });
 
+  // Пробуждение мятежника
+  socket.on('rebelAwakened', ({ name }) => {
+    alert(`${name} пробудился и стал мафией!`);
+  });
+
+  // Мер отменил
+  socket.on('mayorVetoed', ({ name }) => {
+    mayorVetoNote.style.display = 'block';
+    mayorVetoNote.textContent = `Мер (${name}) отменил голосование.`;
+    abilityBtn.style.display = 'none';
+    canMayorVeto = false;
+    canBodyguardSave = false;
+  });
+
+  // Телохранитель спас
+  socket.on('bodyguardSaved', ({ name, self }) => {
+    setTimeout(() => {
+      if (self) alert(`Телохранитель спас себя от казни!`);
+      else alert(`${name} был спасён телохранителем!`);
+    }, 100);
+  });
+
   socket.on('privateResult', (data) => {
     if (data.type === 'sheriff') {
       resultLabel.textContent = 'РЕЗУЛЬТАТ ПРОВЕРКИ';
-      resultTitle.textContent = data.isMafia ? 'ЭТО МАФИЯ' : 'НЕ МАФИЯ';
-      resultTitle.className = 'role-title ' + (data.isMafia ? 'mafia' : 'citizen');
+      resultTitle.textContent = data.targetRoleName || (data.isMafia ? 'МАФИЯ' : 'НЕ МАФИЯ');
+      resultTitle.className = 'role-title ' + data.targetRole;
       resultDesc.innerHTML = data.message;
       setPortrait(resultPortrait, null, '');
       const img = new Image();
@@ -1041,22 +1195,25 @@
       setTimeout(() => alert('Утро. Погибли: ' + deaths.map(d => d.name).join(', ')), 100);
     }
     if (pendingInvite) {
-      setTimeout(() => inviteModal.classList.add('open'), 300);
+      inviteBtn.style.display = 'flex';
     } else {
-      showScreen(waitScreen);
-      roomLabel.textContent = roomId;
+      inviteBtn.style.display = 'none';
     }
+    showScreen(waitScreen);
+    roomLabel.textContent = roomId;
   });
 
   inviteAccept.addEventListener('click', () => {
     socket.emit('respondInvite', { roomId, accept: true }, () => {});
     inviteModal.classList.remove('open');
+    inviteBtn.style.display = 'none';
     showScreen(waitScreen);
     roomLabel.textContent = roomId;
   });
   inviteReject.addEventListener('click', () => {
     socket.emit('respondInvite', { roomId, accept: false }, () => {});
     inviteModal.classList.remove('open');
+    inviteBtn.style.display = 'none';
     showScreen(waitScreen);
     roomLabel.textContent = roomId;
   });
@@ -1075,6 +1232,14 @@
     hideAllScreens();
     if (nightInterval) { clearInterval(nightInterval); nightInterval = null; }
     closeGallery();
+    blockedContinueBtn.style.display = 'none';
+    abilityBtn.style.display = 'none';
+    canMayorVeto = false;
+    canBodyguardSave = false;
+    if (phase === 'lobby' || phase === 'roles') {
+      inviteBtn.style.display = 'none';
+      inviteModal.classList.remove('open');
+    }
     if (phase === 'roles') { showScreen(waitScreen); roomLabel.textContent = roomId; rolesBtn.style.display = 'none'; }
     if (phase === 'night') { nightScreen.style.display = 'block'; nightDay.textContent = day; }
     if (phase === 'day') { dayScreen.style.display = 'block'; dayDay.textContent = day; }
@@ -1090,6 +1255,7 @@
       nightTimer.textContent = '—';
       nightTimer.classList.remove('warn');
       nightActionArea.style.display = 'none';
+      blockedContinueBtn.style.display = 'none';
       if (nightInterval) { clearInterval(nightInterval); nightInterval = null; }
       return;
     }
@@ -1109,6 +1275,7 @@
       nightSub.textContent = 'Вы погибли. Наблюдаете молча.';
       blockedNote.style.display = 'none';
       nightActionArea.style.display = 'none';
+      blockedContinueBtn.style.display = 'none';
       return;
     }
 
@@ -1116,9 +1283,17 @@
       nightSub.textContent = '';
       blockedNote.style.display = 'block';
       nightActionArea.style.display = 'none';
+
+      const isMafiaRole = (data.yourRole === 'mafia' || data.yourRole === 'don' || data.yourRole === 'rebel');
+      if (!isMafiaRole || data.blockedMafiaAlone) {
+        blockedContinueBtn.style.display = 'block';
+      } else {
+        blockedContinueBtn.style.display = 'none';
+      }
       return;
     } else {
       blockedNote.style.display = 'none';
+      blockedContinueBtn.style.display = 'none';
     }
 
     if (data.yourTurn) {
@@ -1142,9 +1317,10 @@
     const role = data.yourRole;
     const isMafiaStep = data.stepRole === 'mafia_don';
     const roleHints = {
-      mafia: 'Выберите жертву. Все мафии (и Дон) должны проголосовать за одного.',
-      don: 'Выберите жертву (все мафии должны согласиться) или пригласите игрока в мафию. Одно действие за ночь.',
-      sheriff: 'Выберите игрока для проверки — сразу увидите результат.',
+      mafia: 'Выберите жертву. Все мафии (и Дон) должны подтвердить одного.',
+      don: 'Выберите жертву или пригласите игрока. Все мафии должны подтвердить.',
+      rebel: 'Выберите жертву. Все мафии должны подтвердить одного.',
+      sheriff: 'Выберите игрока для проверки — узнаете его роль.',
       doctor: 'Выберите игрока для лечения.',
       maniac: 'Выберите жертву.',
       beauty: 'Выберите игрока, чтобы заблокировать его действие. Он будет защищён от казни днём.',
@@ -1152,9 +1328,11 @@
     };
     nightInstruction.textContent = roleHints[role] || 'Выберите цель.';
     nightConfirmBtn.style.display = 'none';
+    doctorSelfBtn.style.display = 'none';
+    mafiaConfirmBtn.style.display = 'none';
     journalSelected = [];
 
-    const alreadyActed = data.myMafiaAction !== null;
+    const alreadyActed = data.myConfirmed;
     if (role === 'don' && isMafiaStep && !alreadyActed) {
       donModeSwitch.style.display = 'flex';
       modeKill.classList.toggle('active', donMode === 'kill');
@@ -1174,22 +1352,36 @@
       recruitsLeftBox.style.display = 'none';
     }
 
+    if (role === 'doctor' && data.doctorCanSelf) {
+      doctorSelfBtn.style.display = 'block';
+    }
+
+    if (isMafiaStep && (role === 'mafia' || role === 'don' || role === 'rebel') && data.myProposal && !data.myConfirmed) {
+      mafiaConfirmBtn.style.display = 'block';
+    }
+
     nightTargets.innerHTML = '';
 
-    if (alreadyActed && (role === 'mafia' || role === 'don')) {
+    if (alreadyActed && (role === 'mafia' || role === 'don' || role === 'rebel')) {
       const li = document.createElement('li');
       li.className = 'feedback-note';
-      const act = data.myMafiaAction;
-      const target = data.players.find(p => p.id === act.targetId);
-      li.textContent = act.mode === 'kill'
-        ? `Вы выбрали убить: ${target ? target.name : '?'}`
-        : `Вы пригласили: ${target ? target.name : '?'}`;
+      const act = data.myProposal;
+      if (act) {
+        const target = data.players.find(p => p.id === act.targetId);
+        li.textContent = act.mode === 'kill'
+          ? `Вы подтвердили убить: ${target ? target.name : '?'}`
+          : `Вы подтвердили пригласить: ${target ? target.name : '?'}`;
+      } else {
+        li.textContent = 'Вы подтвердили выбор';
+      }
       nightTargets.appendChild(li);
     }
 
     data.players.forEach(p => {
       if (!p.alive || p.id === data.yourId) return;
-      if (alreadyActed && (role === 'mafia' || role === 'don')) return;
+      if (alreadyActed && (role === 'mafia' || role === 'don' || role === 'rebel')) return;
+
+      const isOwnTeam = isMafiaStep && (role === 'mafia' || role === 'don' || role === 'rebel') && (p.role === 'mafia' || p.role === 'don' || p.role === 'rebel');
 
       const li = document.createElement('li');
       li.className = 'target';
@@ -1199,11 +1391,21 @@
       nameSpan.textContent = p.name;
       li.appendChild(nameSpan);
 
-      if (isMafiaStep && (role === 'mafia' || role === 'don') && data.mafiaVotes) {
-        const votesFor = Object.entries(data.mafiaVotes)
-          .filter(([, act]) => act && act.targetId === p.id);
-        const killVotes = votesFor.filter(([, act]) => act.mode === 'kill').length;
-        const inviteVotes = votesFor.filter(([, act]) => act.mode === 'invite').length;
+      if (isOwnTeam) {
+        li.style.opacity = '0.6';
+        li.style.cursor = 'not-allowed';
+        const note = document.createElement('span');
+        note.style.fontSize = '12px';
+        note.style.marginLeft = '8px';
+        note.textContent = 'свой';
+        li.appendChild(note);
+      }
+
+      if (isMafiaStep && (role === 'mafia' || role === 'don' || role === 'rebel') && data.proposals) {
+        const proposalsFor = Object.entries(data.proposals)
+          .filter(([actorId, prop]) => prop && prop.targetId === p.id);
+        const killVotes = proposalsFor.filter(([, prop]) => prop.mode === 'kill').length;
+        const inviteVotes = proposalsFor.filter(([, prop]) => prop.mode === 'invite').length;
 
         if (killVotes > 0 || inviteVotes > 0) {
           const dots = document.createElement('span');
@@ -1214,38 +1416,62 @@
           for (let i = 0; i < inviteVotes; i++) {
             const d = document.createElement('span'); d.className = 'd invite'; dots.appendChild(d);
           }
-          const names = votesFor.map(([actorId, act]) => {
+          const names = proposalsFor.map(([actorId, prop]) => {
             const actor = data.players.find(pp => pp.id === actorId);
-            return (actor ? actor.name : '?') + (act.mode === 'invite' ? ' (приглашает)' : '');
+            return (actor ? actor.name : '?') + (prop.mode === 'invite' ? ' (приглашает)' : '');
           });
           dots.title = names.join(', ');
           li.appendChild(dots);
         }
       }
 
-      li.onclick = () => {
-        if (role === 'journalist') {
-          toggleJournalistPick(li, p.id);
-        } else if (role === 'don' && isMafiaStep) {
-          socket.emit('nightAction', { roomId, targetId: p.id, mode: donMode }, (res) => {
-            if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
-            else if (res.invite === 'declined') alert('Этот игрок отказался (особая роль)');
-            else if (res.invite === 'pending') alert('Приглашение отправлено. Ответ узнаете утром, а исход — в следующий ход.');
-          });
-        } else if ((role === 'mafia') && isMafiaStep) {
-          socket.emit('nightAction', { roomId, targetId: p.id, mode: 'kill' }, (res) => {
-            if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
-          });
-        } else {
-          socket.emit('nightAction', { roomId, targetId: p.id }, (res) => {
-            if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
-          });
-        }
-      };
+      if (isMafiaStep && data.myProposal && data.myProposal.targetId === p.id) {
+        li.classList.add('selected');
+      }
+
+      if (!isOwnTeam) {
+        li.onclick = () => {
+          if (role === 'journalist') {
+            toggleJournalistPick(li, p.id);
+          } else if (role === 'don' && isMafiaStep) {
+            socket.emit('nightAction', { roomId, targetId: p.id, mode: donMode, type: 'propose' }, (res) => {
+              if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
+            });
+          } else if (isMafiaStep && (role === 'mafia' || role === 'don' || role === 'rebel')) {
+            socket.emit('nightAction', { roomId, targetId: p.id, mode: 'kill', type: 'propose' }, (res) => {
+              if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
+            });
+          } else {
+            socket.emit('nightAction', { roomId, targetId: p.id }, (res) => {
+              if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
+            });
+          }
+        };
+      }
 
       nightTargets.appendChild(li);
     });
   }
+
+  doctorSelfBtn.addEventListener('click', () => {
+    socket.emit('nightAction', { roomId, self: true }, (res) => {
+      if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
+    });
+  });
+
+  mafiaConfirmBtn.addEventListener('click', () => {
+    socket.emit('nightAction', { roomId, type: 'confirm' }, (res) => {
+      if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
+      else mafiaConfirmBtn.style.display = 'none';
+    });
+  });
+
+  blockedContinueBtn.addEventListener('click', () => {
+    socket.emit('nightPass', { roomId }, (res) => {
+      if (!res?.ok) alert('Ошибка: ' + (res?.error || 'неизвестно'));
+      else blockedContinueBtn.style.display = 'none';
+    });
+  });
 
   modeKill.addEventListener('click', () => {
     donMode = 'kill';
@@ -1284,6 +1510,34 @@
     myVote = null;
     dayScreen.style.display = 'block';
     dayDay.textContent = data.day;
+
+    // Обновляем роль, если мятежник проснулся
+    if (data.yourRole && data.yourRole !== myRole) {
+      myRole = data.yourRole;
+      setRoleCard(myRole, `/images/${myRole}.jpg`);
+    }
+
+    // Мер-вето заметка
+    if (data.mayorVetoed) {
+      mayorVetoNote.style.display = 'block';
+    } else {
+      mayorVetoNote.style.display = 'none';
+    }
+
+    // Кнопка способности
+    canMayorVeto = !!data.canMayorVeto;
+    canBodyguardSave = !!data.canBodyguardSave;
+    if (canMayorVeto || canBodyguardSave) {
+      abilityBtn.style.display = 'flex';
+    } else {
+      abilityBtn.style.display = 'none';
+    }
+
+    if (data.pendingInvite) {
+      inviteBtn.style.display = 'flex';
+    } else {
+      inviteBtn.style.display = 'none';
+    }
 
     if (data.revoteCandidates && data.revoteCandidates.length) {
       revoteNote.style.display = 'block';
@@ -1390,10 +1644,18 @@
     alert('Ничья! Переголосование между: ' + candidates.map(c => c.name).join(', '));
   });
 
-  socket.on('dayResults', ({ day, lynched, tie, firstDay }) => {
+  socket.on('dayResults', ({ day, lynched, tie, firstDay, mayorVeto, savedByBodyguard, bodyguardSavedHimself }) => {
     dayActionArea.style.display = 'none';
+    if (mayorVeto) {
+      // уже уведомлено через mayorVetoed
+      return;
+    }
     if (firstDay) {
       alert('Первый день завершён. Голосования не было.');
+      return;
+    }
+    if (savedByBodyguard || bodyguardSavedHimself) {
+      // уже уведомлено через bodyguardSaved
       return;
     }
     if (lynched) alert(`День ${day}. Казнён: ${lynched.name}`);
@@ -1401,10 +1663,65 @@
     else alert(`День ${day}. Никто не казнён`);
   });
 
-  socket.on('gameOver', ({ winner }) => {
-    if (winner === 'manual') alert('Игра завершена ведущим');
-    else if (winner === 'mafia') alert('Игра окончена: победила МАФИЯ!');
-    else alert('Игра окончена: победили МИРНЫЕ!');
+  socket.on('gameEnded', ({ winner, roles }) => {
+    gameEnded = true;
+    localStorage.removeItem('mafia_player');
+    inviteBtn.style.display = 'none';
+    inviteModal.classList.remove('open');
+    abilityBtn.style.display = 'none';
+
+    if (winner === 'manual') gameEndTitle.textContent = 'Игра завершена ведущим';
+    else if (winner === 'mafia') gameEndTitle.textContent = 'Победила МАФИЯ';
+    else if (winner === 'maniac') gameEndTitle.textContent = 'Победил МАНЬЯК';
+    else gameEndTitle.textContent = 'Победили МИРНЫЕ';
+
+    gameEndRoles.innerHTML = '';
+    const order = { mafia: 0, don: 1, rebel: 2, maniac: 3, sheriff: 4, doctor: 5, mayor: 6, bodyguard: 7, beauty: 8, journalist: 9, citizen: 10 };
+    roles.slice().sort((a, b) => {
+      const ra = a.originalRole === 'rebel' && !a.rebelAwakened ? 11 : (order[a.role] ?? 99);
+      const rb = b.originalRole === 'rebel' && !b.rebelAwakened ? 11 : (order[b.role] ?? 99);
+      return ra - rb;
+    }).forEach(p => {
+      const li = document.createElement('li');
+      let cls = p.role;
+      if (p.originalRole === 'rebel' && !p.rebelAwakened) cls = 'citizen';
+      li.className = 'role-' + cls;
+      const left = document.createElement('span');
+      left.textContent = p.name + (p.alive ? '' : ' (погиб)');
+      const right = document.createElement('span');
+      right.className = 'role-tag';
+      let label = ROLES[p.role]?.label || p.role;
+      if (p.originalRole === 'rebel' && p.rebelAwakened) label = 'МЯТЕЖНИК → МАФИЯ';
+      else if (p.originalRole === 'rebel' && !p.rebelAwakened) label = 'МЯТЕЖНИК (не проснулся)';
+      right.textContent = label;
+      li.appendChild(left);
+      li.appendChild(right);
+      gameEndRoles.appendChild(li);
+    });
+
+    gameEndModal.classList.add('open');
+  });
+
+  gameEndBtn.addEventListener('click', () => {
+    gameEndModal.classList.remove('open');
+    hideAllScreens();
+    showScreen(joinScreen);
+    roleBtn.style.display = 'none';
+    rolesBtn.style.display = 'none';
+    inviteBtn.style.display = 'none';
+    abilityBtn.style.display = 'none';
+    roomId = null;
+    playerToken = null;
+    myRole = null;
+    myId = null;
+    const saved = localStorage.getItem('mafia_player');
+    if (saved) {
+      try {
+        const s = JSON.parse(saved);
+        nameInput.value = s.name || '';
+      } catch (e) {}
+    }
+    localStorage.removeItem('mafia_player');
   });
 
   function escapeHtml(s) {

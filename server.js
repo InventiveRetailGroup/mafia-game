@@ -64,7 +64,17 @@ function roleLabel(role) {
   return ({
     mafia: 'мафия', citizen: 'мирный', sheriff: 'следователь',
     doctor: 'доктор', maniac: 'маньяк', beauty: 'красавчик',
-    journalist: 'журналист', don: 'дон'
+    journalist: 'журналист', don: 'дон', mayor: 'мер',
+    bodyguard: 'телохранитель', rebel: 'мятежник'
+  })[role] || role;
+}
+
+function roleNameRu(role) {
+  return ({
+    mafia: 'Мафия', citizen: 'Мирный житель', sheriff: 'Следователь',
+    doctor: 'Доктор', maniac: 'Маньяк', beauty: 'Красавчик',
+    journalist: 'Журналист', don: 'Дон', mayor: 'Мер',
+    bodyguard: 'Телохранитель', rebel: 'Мятежник'
   })[role] || role;
 }
 
@@ -78,11 +88,17 @@ function nameOf(game, id) {
   return p ? p.name : '???';
 }
 
-const UNRECRUITABLE = ['sheriff', 'doctor', 'maniac', 'beauty', 'journalist'];
+// Особые роли, которых нельзя пригласить в мафию.
+// Мятежника можно!
+const UNRECRUITABLE = ['sheriff', 'doctor', 'maniac', 'beauty', 'journalist', 'mayor', 'bodyguard'];
 
 function maxMafiaWithDon(n) {
   if (n <= 6) return 1;
   return 2;
+}
+
+function aliveMafiaOnlyCount(game) {
+  return game.players.filter(p => p.alive && p.role === 'mafia').length;
 }
 
 function aliveMafiaCount(game) {
@@ -94,55 +110,110 @@ function currentMafiaLimit(game) {
 }
 
 function canDonInvite(game) {
-  return game.recruitsLeft > 0 && aliveMafiaCount(game) < currentMafiaLimit(game);
+  return game.recruitsLeft > 0 && aliveMafiaOnlyCount(game) < currentMafiaLimit(game);
 }
 
-// ---- Раздача ролей ----
+// Мятежник считается мафией, если он "проснулся"
+function isRebelMafia(player) {
+  return player.role === 'rebel' && player.rebelAwakened;
+}
+
+function isMafiaTeamMember(player) {
+  if (!player.alive) return false;
+  if (player.role === 'mafia' || player.role === 'don') return true;
+  if (player.role === 'rebel' && player.rebelAwakened) return true;
+  return false;
+}
+
+// ---- Автобаланс ролей ----
 function assignRoles(players) {
   const n = players.length;
   if (n < 4) return null;
 
-  let mafiaCount;
-  if (n <= 6) mafiaCount = 1;
-  else if (n <= 9) mafiaCount = 2;
-  else mafiaCount = 3;
-
   const fixed = players.filter(p => p.role);
   const free = players.filter(p => !p.role);
 
-  const fixedCounts = { mafia: 0, don: 0, sheriff: 0, doctor: 0, citizen: 0 };
+  const fixedCounts = {};
   fixed.forEach(p => { fixedCounts[p.role] = (fixedCounts[p.role] || 0) + 1; });
 
   const hasDon = fixedCounts.don > 0;
+  const hasRebel = fixedCounts.rebel > 0;
 
-  // Если есть дон — мафии не раздаются автоматически
-  const need = {
-    mafia: hasDon ? 0 : Math.max(0, mafiaCount - fixedCounts.mafia),
-    sheriff: Math.max(0, 1 - fixedCounts.sheriff),
-    doctor: Math.max(0, 1 - fixedCounts.doctor),
-    citizen: 0
-  };
-  const assigned = need.mafia + need.sheriff + need.doctor;
-  need.citizen = Math.max(0, free.length - assigned);
+  // Сколько мафий всего (с доном или без)
+  // Если есть дон — мафий 0 автоматом (дон сам = 1 в команде)
+  // Если есть мятежник — мафий 1 (мало игроков) или 2 (много)
+  let autoMafiaCount = 0;
+  if (!hasDon) {
+    if (hasRebel) {
+      autoMafiaCount = n <= 6 ? 1 : 2;
+    } else {
+      if (n <= 6) autoMafiaCount = 1;
+      else if (n <= 9) autoMafiaCount = 2;
+      else autoMafiaCount = 3;
+    }
+  }
+  // Учитываем уже назначенных вручную мафий
+  const fixedMafia = fixedCounts.mafia || 0;
+  const needMafia = Math.max(0, autoMafiaCount - fixedMafia);
+
+  // Особые роли (по 1 каждой) — сколько добавить автоматом
+  // Список ролей, которые могут быть добавлены автоматически
+  const autoSpecialPool = ['sheriff', 'doctor', 'bodyguard', 'mayor', 'maniac', 'beauty', 'journalist'];
+
+  // Какие особые роли уже назначены вручную (и не будут добавлены повторно)
+  const alreadySpecial = {};
+  autoSpecialPool.forEach(r => { if (fixedCounts[r]) alreadySpecial[r] = true; });
+
+  // Сколько свободных слотов для особых ролей
+  // Целевое количество особых ролей в игре = max(2, floor(n/3)) — не слишком много
+  let targetSpecialCount = Math.max(2, Math.floor(n / 3));
+  // Ограничим до 4-5, чтобы не перегружать
+  targetSpecialCount = Math.min(targetSpecialCount, 5);
+
+  const fixedSpecialCount = autoSpecialPool.filter(r => fixedCounts[r]).length;
+  let needSpecial = Math.max(0, targetSpecialCount - fixedSpecialCount);
+
+  // Пул особых ролей — перемешанный
+  const specialPool = autoSpecialPool.filter(r => !alreadySpecial[r]);
+  for (let i = specialPool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [specialPool[i], specialPool[j]] = [specialPool[j], specialPool[i]];
+  }
+
+  // Сколько свободных игроков останется для "свободных" ролей
+  // Сначала посчитаем общее количество слотов
+  // Свободные = free.length
+  // Нужно разместить: needMafia + needSpecial + остальные мирные
+  // Но если свободных меньше, чем нужно — сокращаем особые
+
+  let assignMafia = Math.min(needMafia, free.length);
+  let assignSpecial = Math.min(needSpecial, free.length - assignMafia);
+
+  // Остаток — мирные
+  const assignCitizens = free.length - assignMafia - assignSpecial;
 
   const pool = [];
-  for (let i = 0; i < need.mafia; i++) pool.push('mafia');
-  for (let i = 0; i < need.sheriff; i++) pool.push('sheriff');
-  for (let i = 0; i < need.doctor; i++) pool.push('doctor');
-  for (let i = 0; i < need.citizen; i++) pool.push('citizen');
+  for (let i = 0; i < assignMafia; i++) pool.push('mafia');
+  for (let i = 0; i < assignSpecial; i++) pool.push(specialPool[i]);
+  for (let i = 0; i < assignCitizens; i++) pool.push('citizen');
 
-  while (pool.length < free.length) pool.push('citizen');
-  pool.length = free.length;
-
+  // Перемешиваем
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
 
-  free.forEach((p, i) => { p.role = pool[i]; });
-  players.forEach(p => { p.alive = true; });
+  free.forEach((p, i) => { p.role = pool[i] || 'citizen'; });
+  players.forEach(p => {
+    p.alive = true;
+    p.rebelAwakened = false;
+    // Телохранитель — 2 жизни
+    p.bodyguardLives = p.role === 'bodyguard' ? 2 : 0;
+  });
 
-  return { mafiaCount: players.filter(p => p.role === 'mafia' || p.role === 'don').length };
+  return {
+    mafiaCount: players.filter(p => p.role === 'mafia' || p.role === 'don' || (p.role === 'rebel' && p.rebelAwakened)).length
+  };
 }
 
 // ---------- Ночь ----------
@@ -157,6 +228,8 @@ function beginNight(roomId) {
 
   game.night = {
     actions: {},
+    proposals: {},
+    confirmed: {},
     blocked: [],
     lastDoctorTarget: game.lastDoctorTarget || null,
     doctorSelfUsed: game.doctorSelfUsed || false,
@@ -168,10 +241,13 @@ function beginNight(roomId) {
 
   game.pendingDonFeedback = null;
 
+  // Проверяем, есть ли мафия-команда (включая пробуждённого мятежника)
+  const hasMafiaTeam = game.players.some(p => p.alive && (
+    p.role === 'mafia' || p.role === 'don' || (p.role === 'rebel' && p.rebelAwakened)
+  ));
+
   game.night.steps = NIGHT_ORDER.filter(step => {
-    if (step.role === 'mafia_don') {
-      return game.players.some(p => p.alive && (p.role === 'mafia' || p.role === 'don'));
-    }
+    if (step.role === 'mafia_don') return hasMafiaTeam;
     return game.players.some(p => p.alive && p.role === step.role);
   });
 
@@ -206,25 +282,23 @@ function nextNightStep(roomId) {
   game.night.timerHandle = setTimeout(() => nextNightStep(roomId), sec * 1000);
 }
 
-function getRoleActionsForPlayer(game, player) {
-  const out = {};
-  if (game.night.actions.mafia_don && game.night.actions.mafia_don[player.id]) {
-    out.mafia_don = game.night.actions.mafia_don[player.id];
-  }
-  for (const role of Object.keys(game.night.actions)) {
-    if (role === 'mafia_don') continue;
-    const map = game.night.actions[role];
-    if (map[player.id] !== undefined) out[role] = map[player.id];
-  }
-  return out;
-}
-
-function getMafiaVotes(game) {
-  const map = game.night.actions.mafia_don || {};
+function getMafiaProposals(game) {
+  const proposals = game.night.proposals.mafia_don || {};
   const result = {};
   game.players.forEach(p => {
-    if ((p.role === 'mafia' || p.role === 'don') && p.alive) {
-      result[p.id] = map[p.id] || null;
+    if (p.alive && (p.role === 'mafia' || p.role === 'don' || (p.role === 'rebel' && p.rebelAwakened))) {
+      result[p.id] = proposals[p.id] || null;
+    }
+  });
+  return result;
+}
+
+function getMafiaConfirmed(game) {
+  const confirmed = game.night.confirmed.mafia_don || {};
+  const result = {};
+  game.players.forEach(p => {
+    if (p.alive && (p.role === 'mafia' || p.role === 'don' || (p.role === 'rebel' && p.rebelAwakened))) {
+      result[p.id] = !!confirmed[p.id];
     }
   });
   return result;
@@ -235,17 +309,38 @@ function broadcastNightState(roomId) {
   if (!game) return;
   const step = game.night.steps[game.night.currentStepIndex] || null;
 
+  const aliveMafiaTeam = game.players.filter(p =>
+    p.alive && (p.role === 'mafia' || p.role === 'don' || (p.role === 'rebel' && p.rebelAwakened))
+  );
+
   game.players.forEach(p => {
     if (!p.socketId) return;
     const isBlocked = game.night.blocked.includes(p.id);
+    const inMafiaTeam = (p.role === 'mafia' || p.role === 'don' || (p.role === 'rebel' && p.rebelAwakened));
     const yourTurn = !!(step && p.alive && !isBlocked && (
-      (step.role === 'mafia_don' && (p.role === 'mafia' || p.role === 'don')) ||
+      (step.role === 'mafia_don' && inMafiaTeam) ||
       (step.role !== 'mafia_don' && p.role === step.role)
     ));
 
-    let myMafiaAction = null;
-    if ((p.role === 'mafia' || p.role === 'don') && game.night.actions.mafia_don) {
-      myMafiaAction = game.night.actions.mafia_don[p.id] || null;
+    let myProposal = null;
+    let myConfirmed = false;
+    if (inMafiaTeam && game.night.proposals.mafia_don) {
+      myProposal = game.night.proposals.mafia_don[p.id] || null;
+      myConfirmed = !!game.night.confirmed.mafia_don?.[p.id];
+    }
+
+    const doctorCanSelf = p.role === 'doctor' && p.alive && !isBlocked && !game.night.doctorSelfUsed;
+
+    let blockedMafiaAlone = false;
+    if (isBlocked && inMafiaTeam) {
+      const others = aliveMafiaTeam.filter(x => x.id !== p.id);
+      blockedMafiaAlone = others.length === 0;
+    }
+
+    let blockedCanPass = false;
+    if (isBlocked && !inMafiaTeam) {
+      const sameRoleAlive = game.players.filter(x => x.alive && x.role === p.role && x.id !== p.id && !game.night.blocked.includes(x.id));
+      blockedCanPass = sameRoleAlive.length === 0;
     }
 
     io.to(p.socketId).emit('nightState', {
@@ -254,16 +349,21 @@ function broadcastNightState(roomId) {
       stepLabel: step ? step.label : null,
       seconds: step ? step.seconds : 0,
       yourTurn,
-      yourRole: p.role,
+      yourRole: (p.role === 'rebel' && p.rebelAwakened) ? 'mafia' : p.role,
       yourId: p.id,
       alive: p.alive,
       blocked: isBlocked,
+      blockedMafiaAlone,
+      blockedCanPass,
+      doctorCanSelf,
       players: game.players.map(pp => ({
-        id: pp.id, name: pp.name, alive: pp.alive, connected: !!pp.socketId
+        id: pp.id, name: pp.name, alive: pp.alive, connected: !!pp.socketId,
+        role: inMafiaTeam ? ((pp.role === 'mafia' || pp.role === 'don' || (pp.role === 'rebel' && pp.rebelAwakened)) ? 'mafia' : null) : null
       })),
-      myActions: getRoleActionsForPlayer(game, p),
-      myMafiaAction,
-      mafiaVotes: getMafiaVotes(game),
+      proposals: getMafiaProposals(game),
+      confirmed: getMafiaConfirmed(game),
+      myProposal,
+      myConfirmed,
       recruitsLeft: game.recruitsLeft,
       canDonInvite: (p.role === 'don') ? canDonInvite(game) : false,
       donFeedback: (p.role === 'don') ? game.night.donInviteFeedback : null
@@ -281,20 +381,22 @@ function buildHostNightState(game) {
     stepRole: game.night.steps[game.night.currentStepIndex]?.role || null,
     stepLabel: game.night.steps[game.night.currentStepIndex]?.label || null,
     players: game.players.map(p => ({
-      id: p.id, name: p.name, role: p.role, alive: p.alive, connected: !!p.socketId
+      id: p.id, name: p.name, role: p.role, alive: p.alive, connected: !!p.socketId,
+      rebelAwakened: p.rebelAwakened || false
     })),
     actions: game.night.actions,
+    proposals: game.night.proposals,
     blocked: game.night.blocked,
     journal: game.night.journal
   };
 }
 
-function allMafiaDonActed(game) {
-  const map = game.night.actions.mafia_don || {};
+function allMafiaDonConfirmed(game) {
+  const confirmed = game.night.confirmed.mafia_don || {};
   const players = game.players.filter(p =>
-    p.alive && (p.role === 'mafia' || p.role === 'don') && !game.night.blocked.includes(p.id)
+    p.alive && (p.role === 'mafia' || p.role === 'don' || (p.role === 'rebel' && p.rebelAwakened)) && !game.night.blocked.includes(p.id)
   );
-  return players.every(p => map[p.id] !== undefined);
+  return players.every(p => confirmed[p.id]);
 }
 
 function handleNightAction(roomId, playerId, payload) {
@@ -308,16 +410,39 @@ function handleNightAction(roomId, playerId, payload) {
   if (!player || !player.alive) return { ok: false, error: 'Вы не можете действовать' };
   if (game.night.blocked.includes(player.id)) return { ok: false, error: 'Вы заблокированы красавчиком' };
 
-  if (step.role === 'mafia_don' && (player.role === 'mafia' || player.role === 'don')) {
-    if (!game.night.actions.mafia_don) game.night.actions.mafia_don = {};
-    if (game.night.actions.mafia_don[player.id]) {
-      return { ok: false, error: 'Вы уже сделали ход этой ночью' };
+  const inMafiaTeam = (player.role === 'mafia' || player.role === 'don' || (player.role === 'rebel' && player.rebelAwakened));
+
+  if (step.role === 'mafia_don' && inMafiaTeam) {
+    const actionType = payload?.type || 'propose';
+
+    if (actionType === 'confirm') {
+      const proposal = game.night.proposals.mafia_don?.[player.id];
+      if (!proposal) return { ok: false, error: 'Сначала выберите цель' };
+
+      if (!game.night.confirmed.mafia_don) game.night.confirmed.mafia_don = {};
+      game.night.confirmed.mafia_don[player.id] = true;
+
+      if (!game.night.actions.mafia_don) game.night.actions.mafia_don = {};
+      game.night.actions.mafia_don[player.id] = { mode: proposal.mode, targetId: proposal.targetId };
+
+      tryAdvanceStep(roomId);
+      return { ok: true, confirmed: true };
+    }
+
+    if (game.night.confirmed.mafia_don?.[player.id]) {
+      return { ok: false, error: 'Вы уже подтвердили выбор' };
     }
 
     const mode = payload?.mode || 'kill';
     const targetId = payload?.targetId;
     const target = game.players.find(p => p.id === targetId && p.alive);
     if (!target) return { ok: false, error: 'Цель недоступна' };
+
+    const targetInMafiaTeam = target.alive && (target.role === 'mafia' || target.role === 'don' || (target.role === 'rebel' && target.rebelAwakened));
+
+    if (mode === 'kill' && targetInMafiaTeam) {
+      return { ok: false, error: 'Нельзя голосовать за своих' };
+    }
 
     if (mode === 'invite') {
       if (player.role !== 'don') {
@@ -326,23 +451,27 @@ function handleNightAction(roomId, playerId, payload) {
       if (!canDonInvite(game)) {
         return { ok: false, error: 'Достигнут лимит мафий или приглашений' };
       }
-      if (target.role === 'mafia' || target.role === 'don') {
+      if (targetInMafiaTeam) {
         return { ok: false, error: 'Этот игрок уже мафия' };
       }
-      game.recruitsLeft--;
-      const accepted = !UNRECRUITABLE.includes(target.role);
-      game.night.actions.mafia_don[player.id] = { mode: 'invite', targetId: target.id };
 
-      if (accepted) {
-        return { ok: true, invite: 'pending' };
+      game.recruitsLeft--;
+      if (!game.night.proposals.mafia_don) game.night.proposals.mafia_don = {};
+      game.night.proposals.mafia_don[player.id] = { mode: 'invite', targetId: target.id };
+
+      const isSpecialRole = UNRECRUITABLE.includes(target.role);
+      if (isSpecialRole) {
+        game.pendingDonFeedback = `Игрок ${target.name} отклонил приглашение`;
       }
-      game.pendingDonFeedback = `Ваше приглашение игроку ${target.name} отклонено`;
-      return { ok: true, invite: 'declined' };
+
+      broadcastNightState(roomId);
+      return { ok: true, invite: 'pending', proposed: true };
     }
 
-    game.night.actions.mafia_don[player.id] = { mode: 'kill', targetId: target.id };
-    tryAdvanceStep(roomId);
-    return { ok: true };
+    if (!game.night.proposals.mafia_don) game.night.proposals.mafia_don = {};
+    game.night.proposals.mafia_don[player.id] = { mode: 'kill', targetId: target.id };
+    broadcastNightState(roomId);
+    return { ok: true, proposed: true };
   }
 
   if (player.role === 'journalist' && step.role === 'journalist') {
@@ -373,6 +502,18 @@ function handleNightAction(roomId, playerId, payload) {
 
   if (player.role !== step.role) return { ok: false, error: 'Сейчас не ваш ход' };
 
+  if (player.role === 'doctor' && payload?.self) {
+    if (game.night.doctorSelfUsed) return { ok: false, error: 'Вы уже лечили себя' };
+    if (game.night.lastDoctorTarget === player.id) {
+      return { ok: false, error: 'Нельзя лечить одного и того же дважды подряд' };
+    }
+    if (!game.night.actions.doctor) game.night.actions.doctor = {};
+    game.night.actions.doctor[player.id] = player.id;
+    game.doctorSelfUsed = true;
+    tryAdvanceStep(roomId);
+    return { ok: true };
+  }
+
   const targetId = Array.isArray(payload) ? payload[0] : (payload?.targetId ?? payload);
   const target = game.players.find(p => p.id === targetId);
   if (!target || !target.alive) return { ok: false, error: 'Цель недоступна' };
@@ -400,19 +541,77 @@ function handleNightAction(roomId, playerId, payload) {
   }
 
   if (player.role === 'sheriff') {
-    const isMafia = target.role === 'mafia' || target.role === 'don';
+    let reportedRole = target.role;
+    // Мятежник до пробуждения — как мирный
+    if (target.role === 'rebel' && !target.rebelAwakened) {
+      reportedRole = 'citizen';
+    }
+    // Если мятежник проснулся — как мафия
+    if (target.role === 'rebel' && target.rebelAwakened) {
+      reportedRole = 'mafia';
+    }
+    const isMafia = reportedRole === 'mafia' || reportedRole === 'don';
     io.to(player.socketId).emit('privateResult', {
       type: 'sheriff',
       target: target.name,
-      targetRole: target.role,
+      targetRole: reportedRole,
+      targetRoleName: roleNameRu(reportedRole),
       isMafia,
-      message: isMafia
-        ? `${target.name} — МАФИЯ!`
-        : `${target.name} — не мафия`
+      message: `${target.name} — ${roleNameRu(reportedRole)}`
     });
   }
 
   tryAdvanceStep(roomId);
+  return { ok: true };
+}
+
+function handleBlockedPass(roomId, playerId) {
+  const game = games[roomId];
+  if (!game || game.phase !== 'night') return { ok: false, error: 'Не ночь' };
+
+  const player = game.players.find(p => p.id === playerId);
+  if (!player || !player.alive) return { ok: false, error: 'Игрок недоступен' };
+  if (!game.night.blocked.includes(player.id)) return { ok: false, error: 'Вы не заблокированы' };
+
+  const inMafiaTeam = (player.role === 'mafia' || player.role === 'don' || (player.role === 'rebel' && player.rebelAwakened));
+
+  if (inMafiaTeam) {
+    const others = game.players.filter(p =>
+      p.alive && p.id !== playerId && (p.role === 'mafia' || p.role === 'don' || (p.role === 'rebel' && p.rebelAwakened)) && !game.night.blocked.includes(p.id)
+    );
+    if (others.length > 0) {
+      return { ok: false, error: 'Дождитесь коллег по команде' };
+    }
+    if (!game.night.confirmed.mafia_don) game.night.confirmed.mafia_don = {};
+    game.night.confirmed.mafia_don[player.id] = true;
+    if (!game.night.actions.mafia_don) game.night.actions.mafia_don = {};
+    game.night.actions.mafia_don[player.id] = null;
+
+    const step = game.night.steps[game.night.currentStepIndex];
+    if (step && step.role === 'mafia_don') {
+      tryAdvanceStep(roomId);
+    } else {
+      broadcastNightState(roomId);
+    }
+    return { ok: true };
+  }
+
+  const sameRoleAlive = game.players.filter(p =>
+    p.alive && p.role === player.role && p.id !== player.id && !game.night.blocked.includes(p.id)
+  );
+  if (sameRoleAlive.length > 0) {
+    return { ok: false, error: 'Дождитесь коллег по роли' };
+  }
+
+  if (!game.night.actions[player.role]) game.night.actions[player.role] = {};
+  game.night.actions[player.role][player.id] = null;
+
+  const step = game.night.steps[game.night.currentStepIndex];
+  if (step && step.role === player.role) {
+    tryAdvanceStep(roomId);
+  } else {
+    broadcastNightState(roomId);
+  }
   return { ok: true };
 }
 
@@ -425,30 +624,41 @@ function tryAdvanceStep(roomId) {
   const role = step.role;
 
   if (role === 'mafia_don') {
-    if (!allMafiaDonActed(game)) {
+    if (!allMafiaDonConfirmed(game)) {
       broadcastNightState(roomId);
       return;
     }
-    const map = game.night.actions.mafia_don || {};
-    const rolePlayers = game.players.filter(p =>
-      p.alive && (p.role === 'mafia' || p.role === 'don') && !game.night.blocked.includes(p.id)
-    );
-    const killTargets = rolePlayers
-      .filter(p => map[p.id] && map[p.id].mode === 'kill')
-      .map(p => map[p.id].targetId);
 
-    const anyInvite = rolePlayers.some(p => map[p.id] && map[p.id].mode === 'invite');
+    const actionsMap = game.night.actions.mafia_don || {};
+    const aliveTeam = game.players.filter(p =>
+      p.alive && (p.role === 'mafia' || p.role === 'don' || (p.role === 'rebel' && p.rebelAwakened)) && !game.night.blocked.includes(p.id)
+    );
+
+    const actualVoters = aliveTeam.filter(p => actionsMap[p.id] !== null);
+
+    const anyInvite = actualVoters.some(p => actionsMap[p.id] && actionsMap[p.id].mode === 'invite');
     if (anyInvite) {
       broadcastNightState(roomId);
       setTimeout(() => nextNightStep(roomId), 600);
       return;
     }
 
-    if (killTargets.length && killTargets.every(t => t === killTargets[0])) {
+    const killTargets = actualVoters
+      .filter(p => actionsMap[p.id] && actionsMap[p.id].mode === 'kill')
+      .map(p => actionsMap[p.id].targetId);
+
+    if (killTargets.length === 0) {
       broadcastNightState(roomId);
       setTimeout(() => nextNightStep(roomId), 600);
       return;
     }
+
+    if (killTargets.every(t => t === killTargets[0])) {
+      broadcastNightState(roomId);
+      setTimeout(() => nextNightStep(roomId), 600);
+      return;
+    }
+
     broadcastNightState(roomId);
     return;
   }
@@ -482,25 +692,26 @@ function finishNight(roomId) {
   const deaths = [];
 
   const map = game.night.actions.mafia_don || {};
-  const mafiaTeamAlive = game.players.filter(p => p.alive && (p.role === 'mafia' || p.role === 'don'));
-  const anyInvite = mafiaTeamAlive.some(p => map[p.id] && map[p.id].mode === 'invite');
+  const mafiaTeamAlive = game.players.filter(p => p.alive && (p.role === 'mafia' || p.role === 'don' || (p.role === 'rebel' && p.rebelAwakened)));
+  const actualVoters = mafiaTeamAlive.filter(p => map[p.id] !== null && map[p.id] !== undefined);
+  const anyInvite = actualVoters.some(p => map[p.id] && map[p.id].mode === 'invite');
   let mafiaVictim = null;
 
   if (anyInvite) {
-    const inviter = mafiaTeamAlive.find(p => map[p.id] && map[p.id].mode === 'invite');
+    const inviter = actualVoters.find(p => map[p.id] && map[p.id].mode === 'invite');
     if (inviter) {
       const tId = map[inviter.id].targetId;
       const target = game.players.find(p => p.id === tId);
       journal.push(`Дон пригласил: ${target ? target.name : '?'}`);
     }
   } else {
-    const killTargets = mafiaTeamAlive
+    const killTargets = actualVoters
       .filter(p => map[p.id] && map[p.id].mode === 'kill')
       .map(p => map[p.id].targetId);
     if (killTargets.length && killTargets.every(t => t === killTargets[0])) {
       mafiaVictim = killTargets[0];
       journal.push(`Мафия единогласно выбрала: ${nameOf(game, mafiaVictim)}`);
-    } else if (mafiaTeamAlive.length) {
+    } else if (actualVoters.length) {
       journal.push(`Мафия НЕ договорилась — жертвы нет`);
     }
   }
@@ -524,12 +735,12 @@ function finishNight(roomId) {
       doctorSaved = docTarget;
       journal.push(`Доктор лечил: ${nameOf(game, docTarget)}`);
       game.lastDoctorTarget = docTarget;
-      if (docTarget === doctorAlive[0].id) game.doctorSelfUsed = true;
     }
   } else if (game.players.some(p => p.alive && p.role === 'doctor')) {
     journal.push(`Доктор был заблокирован красавчиком`);
   }
 
+  // Собираем жертв
   const victims = new Set();
   if (mafiaVictim) victims.add(mafiaVictim);
   if (maniacVictim) victims.add(maniacVictim);
@@ -537,7 +748,17 @@ function finishNight(roomId) {
 
   victims.forEach(id => {
     const p = game.players.find(pp => pp.id === id);
-    if (p) { p.alive = false; deaths.push(p); }
+    if (!p) return;
+
+    // Телохранитель с 2 жизнями
+    if (p.role === 'bodyguard' && p.bodyguardLives > 1) {
+      p.bodyguardLives--;
+      journal.push(`Телохранитель ${p.name} выжил благодаря бронежилету (осталось ${p.bodyguardLives})`);
+      return;
+    }
+
+    p.alive = false;
+    deaths.push(p);
   });
 
   const sheriffAlive = game.players.filter(p => p.alive && p.role === 'sheriff' && !game.night.blocked.includes(p.id));
@@ -582,17 +803,19 @@ function finishNight(roomId) {
 
   let pendingInvite = null;
   if (anyInvite) {
-    const inviter = mafiaTeamAlive.find(p => map[p.id] && map[p.id].mode === 'invite');
+    const inviter = actualVoters.find(p => map[p.id] && map[p.id].mode === 'invite');
     if (inviter) {
       const tId = map[inviter.id].targetId;
       const target = game.players.find(p => p.id === tId && p.alive);
-      if (target) {
+      if (target && !UNRECRUITABLE.includes(target.role)) {
         pendingInvite = {
           targetId: target.id,
           targetName: target.name,
           byDonId: inviter.id
         };
         journal.push(`Приглашение отправлено игроку ${target.name} — ответ утром`);
+      } else if (target) {
+        journal.push(`Приглашение отправлено игроку ${target.name}`);
       }
     }
   }
@@ -623,6 +846,7 @@ function finishNight(roomId) {
   game.nightImmunity = [];
   game.revoteCandidates = null;
   game.firstDay = false;
+  game.mayorVetoed = false;
 
   if (game.night.actions.beauty) {
     const bAlive = game.players.filter(p => p.alive && p.role === 'beauty');
@@ -635,7 +859,11 @@ function finishNight(roomId) {
   io.to(game.hostSocketId).emit('phaseChanged', { phase: 'day', day: game.day });
   broadcastDayState(roomId);
 
-  checkGameEnd(roomId);
+  // Проверка пробуждения мятежника (после ночи)
+  // Сначала пробуждение — потом конец игры
+  const rebelResult = tryAwakenRebel(roomId, 'night');
+
+  checkGameEnd(roomId, rebelResult);
 }
 
 // ---------- День ----------
@@ -649,17 +877,26 @@ function broadcastDayState(roomId) {
 
   game.players.forEach(p => {
     if (!p.socketId) return;
+    const isMayor = p.role === 'mayor' && p.alive;
+    const isBodyguard = p.role === 'bodyguard' && p.alive;
+    const canMayorVeto = isMayor && !game.mayorUsed && !game.firstDay && !game.mayorVetoed;
+    const canBodyguardSave = isBodyguard && !game.bodyguardUsed;
+
     io.to(p.socketId).emit('dayState', {
       day: game.day,
       alive: p.alive,
-      yourRole: p.role,
+      yourRole: (p.role === 'rebel' && p.rebelAwakened) ? 'mafia' : p.role,
       yourId: p.id,
       firstDay: !!game.firstDay,
       players: playersForPlayers,
       votes: game.votes || {},
       immunity: game.nightImmunity || [],
       revoteCandidates: game.revoteCandidates || null,
-      pendingInvite: (game.pendingInvites || []).find(inv => inv.targetId === p.id) || null
+      pendingInvite: (game.pendingInvites || []).find(inv => inv.targetId === p.id) || null,
+      canMayorVeto,
+      canBodyguardSave,
+      mayorVetoed: !!game.mayorVetoed,
+      bodyguardUsed: !!game.bodyguardUsed
     });
   });
 
@@ -667,14 +904,93 @@ function broadcastDayState(roomId) {
     day: game.day,
     firstDay: !!game.firstDay,
     players: game.players.map(p => ({
-      id: p.id, name: p.name, role: p.role, alive: p.alive, connected: !!p.socketId
+      id: p.id, name: p.name, role: p.role, alive: p.alive, connected: !!p.socketId,
+      rebelAwakened: p.rebelAwakened || false,
+      bodyguardLives: p.bodyguardLives || 0
     })),
     votes: game.votes || {},
     immunity: game.nightImmunity || [],
     revoteCandidates: game.revoteCandidates || null,
     hintsTotal: game.hintsTotal || 0,
-    hintsUsed: game.hintsUsed || 0
+    hintsUsed: game.hintsUsed || 0,
+    mayorUsed: !!game.mayorUsed,
+    mayorVetoed: !!game.mayorVetoed,
+    bodyguardUsed: !!game.bodyguardUsed,
+    bodyguardSaveTarget: game.bodyguardSaveTarget || null
   });
+}
+
+// ---------- Пробуждение мятежника ----------
+// phase: 'night' | 'day' — от чего зависит минимальное количество добрых
+function tryAwakenRebel(roomId, phase) {
+  const game = games[roomId];
+  if (!game) return { awakened: false };
+
+  const rebel = game.players.find(p => p.role === 'rebel' && p.alive && !p.rebelAwakened);
+  if (!rebel) return { awakened: false };
+
+  // Есть ли ещё живые мафии/дон?
+  const aliveMafiaTeam = game.players.filter(p => p.alive && (p.role === 'mafia' || p.role === 'don')).length;
+  if (aliveMafiaTeam > 0) return { awakened: false };
+
+  // Сколько добрых игроков (все, кроме мафии/дона/мятежника)
+  const aliveGood = game.players.filter(p =>
+    p.alive && p.role !== 'mafia' && p.role !== 'don' && p.role !== 'rebel'
+  ).length;
+
+  // Если последняя мафия убита ночью — нужно >= 2 добрых
+  // Если казнена днём — нужно >= 3 добрых
+  const minGood = phase === 'night' ? 2 : 3;
+
+  if (aliveGood >= minGood) {
+    rebel.rebelAwakened = true;
+    io.to(game.hostSocketId).emit('rebelAwakened', { name: rebel.name });
+    game.players.forEach(p => {
+      if (!p.socketId) return;
+      if (p.id === rebel.id) {
+        io.to(p.socketId).emit('yourRole', {
+          role: 'mafia',
+          name: p.name,
+          image: findImage('mafia'),
+          rebelAwakened: true
+        });
+      } else {
+        io.to(p.socketId).emit('rebelAwakened', { name: rebel.name });
+      }
+    });
+    return { awakened: true };
+  }
+
+  return { awakened: false };
+}
+
+// ---------- Конец игры ----------
+function endGameAndBroadcast(roomId, winner) {
+  const game = games[roomId];
+  if (!game) return;
+
+  if (game.night && game.night.timerHandle) {
+    clearTimeout(game.night.timerHandle);
+    game.night.timerHandle = null;
+  }
+
+  const rolesList = game.players.map(p => ({
+    id: p.id,
+    name: p.name,
+    role: (p.role === 'rebel' && p.rebelAwakened) ? 'mafia' : p.role,
+    originalRole: p.role,
+    alive: p.alive,
+    rebelAwakened: p.rebelAwakened || false
+  }));
+
+  const payload = { winner, roles: rolesList };
+
+  io.to(game.hostSocketId).emit('gameEnded', payload);
+  game.players.forEach(p => {
+    if (p.socketId) io.to(p.socketId).emit('gameEnded', payload);
+  });
+
+  delete games[roomId];
 }
 
 // ---------- Socket.IO ----------
@@ -701,6 +1017,10 @@ io.on('connection', (socket) => {
       pendingInvites: [],
       hintsTotal: 0,
       hintsUsed: 0,
+      mayorUsed: false,
+      mayorVetoed: false,
+      bodyguardUsed: false,
+      bodyguardSaveTarget: null,
       mode: 'classic'
     };
     socket.join(roomId);
@@ -743,10 +1063,10 @@ io.on('connection', (socket) => {
         socket.data.playerId = existing.id;
         callback({ ok: true, playerId: existing.id, playerToken: existing.token, reconnected: true });
         if (existing.role) {
-          io.to(socket.id).emit('yourRole', {
-            role: existing.role,
+          io.to(socket.id).emit('roleReconnect', {
+            role: (existing.role === 'rebel' && existing.rebelAwakened) ? 'mafia' : existing.role,
             name: existing.name,
-            image: findImage(existing.role)
+            image: findImage((existing.role === 'rebel' && existing.rebelAwakened) ? 'mafia' : existing.role)
           });
           io.to(socket.id).emit('phaseChanged', { phase: game.phase, day: game.day });
         }
@@ -773,7 +1093,9 @@ io.on('connection', (socket) => {
       token: nanoid(24),
       socketId: socket.id,
       alive: true,
-      role: null
+      role: null,
+      rebelAwakened: false,
+      bodyguardLives: 0
     };
     game.players.push(player);
     socket.join(roomId);
@@ -801,7 +1123,7 @@ io.on('connection', (socket) => {
     const game = games[roomId];
     if (!game || game.hostSocketId !== socket.id) return;
     if (game.phase !== 'lobby') return;
-    const allowed = ['mafia', 'sheriff', 'doctor', 'citizen', 'maniac', 'beauty', 'journalist', 'don'];
+    const allowed = ['mafia', 'sheriff', 'doctor', 'citizen', 'maniac', 'beauty', 'journalist', 'don', 'mayor', 'bodyguard', 'rebel'];
     if (role !== null && !allowed.includes(role)) return;
     const player = game.players.find(p => p.id === playerId);
     if (!player) return;
@@ -818,7 +1140,6 @@ io.on('connection', (socket) => {
     const result = assignRoles(game.players);
     if (!result) return callback?.({ ok: false, error: 'Не удалось раздать роли' });
 
-    // Игра начинается с дня (день 0, без голосования)
     game.phase = 'day';
     game.day = 0;
     game.firstDay = true;
@@ -831,6 +1152,10 @@ io.on('connection', (socket) => {
     game.pendingInvites = [];
     game.hintsTotal = 0;
     game.hintsUsed = 0;
+    game.mayorUsed = false;
+    game.mayorVetoed = false;
+    game.bodyguardUsed = false;
+    game.bodyguardSaveTarget = null;
 
     game.players.forEach(p => {
       if (p.socketId) {
@@ -850,7 +1175,8 @@ io.on('connection', (socket) => {
       firstDay: true,
       mafiaCount: result.mafiaCount,
       players: game.players.map(p => ({
-        id: p.id, name: p.name, alive: p.alive, connected: !!p.socketId, role: p.role
+        id: p.id, name: p.name, alive: p.alive, connected: !!p.socketId, role: p.role,
+        rebelAwakened: p.rebelAwakened || false
       }))
     });
     io.to(game.hostSocketId).emit('phaseChanged', { phase: 'day', day: 0 });
@@ -872,20 +1198,17 @@ io.on('connection', (socket) => {
   socket.on('endGame', ({ roomId }, callback) => {
     const game = games[roomId];
     if (!game || game.hostSocketId !== socket.id) return callback?.({ ok: false, error: 'Нет доступа' });
-    if (game.night && game.night.timerHandle) {
-      clearTimeout(game.night.timerHandle);
-      game.night.timerHandle = null;
-    }
-    game.phase = 'ended';
-    io.to(game.hostSocketId).emit('gameOver', { winner: 'manual' });
-    game.players.forEach(p => p.socketId && io.to(p.socketId).emit('gameOver', { winner: 'manual' }));
-    io.to(game.hostSocketId).emit('phaseChanged', { phase: 'ended', day: game.day });
-    game.players.forEach(p => p.socketId && io.to(p.socketId).emit('phaseChanged', { phase: 'ended', day: game.day }));
+    endGameAndBroadcast(roomId, 'manual');
     callback?.({ ok: true });
   });
 
-  socket.on('nightAction', ({ roomId, targetId, mode }, callback) => {
-    const res = handleNightAction(roomId, socket.data.playerId, { targetId, mode });
+  socket.on('nightAction', ({ roomId, targetId, mode, type, self }, callback) => {
+    const res = handleNightAction(roomId, socket.data.playerId, { targetId, mode, type, self });
+    callback?.(res);
+  });
+
+  socket.on('nightPass', ({ roomId }, callback) => {
+    const res = handleBlockedPass(roomId, socket.data.playerId);
     callback?.(res);
   });
 
@@ -899,7 +1222,13 @@ io.on('connection', (socket) => {
     if (!inv) return callback?.({ ok: false, error: 'Нет приглашения' });
 
     if (accept) {
-      player.role = 'mafia';
+      // Если мятежник — становится мафией + rebelAwakened
+      if (player.role === 'rebel') {
+        player.role = 'mafia';
+        player.rebelAwakened = true;
+      } else {
+        player.role = 'mafia';
+      }
       io.to(player.socketId).emit('yourRole', {
         role: 'mafia',
         name: player.name,
@@ -917,7 +1246,53 @@ io.on('connection', (socket) => {
     callback?.({ ok: true });
   });
 
-  // ---- Подсказки ----
+  // ---- Мер: отменить голосование ----
+  socket.on('mayorVeto', ({ roomId }, callback) => {
+    const game = games[roomId];
+    if (!game || game.phase !== 'day') return callback?.({ ok: false, error: 'Не день' });
+    const player = game.players.find(p => p.id === socket.data.playerId);
+    if (!player || !player.alive) return callback?.({ ok: false, error: 'Игрок недоступен' });
+    if (player.role !== 'mayor') return callback?.({ ok: false, error: 'Вы не мер' });
+    if (game.mayorUsed) return callback?.({ ok: false, error: 'Способность уже использована' });
+    if (game.firstDay) return callback?.({ ok: false, error: 'В первый день нельзя' });
+    if (game.mayorVetoed) return callback?.({ ok: false, error: 'Уже отменено сегодня' });
+
+    game.mayorUsed = true;
+    game.mayorVetoed = true;
+    game.votes = {};
+    game.revoteCandidates = null;
+
+    // Телохранитель НЕ тратит способность, но его выбор сбрасывается
+    // (по требованию — если мер отменил, телохранитель не тратит)
+
+    io.to(game.hostSocketId).emit('mayorVetoed', { name: player.name });
+    game.players.forEach(p => {
+      if (p.socketId) io.to(p.socketId).emit('mayorVetoed', { name: player.name });
+    });
+    broadcastDayState(roomId);
+    callback?.({ ok: true });
+  });
+
+  // ---- Телохранитель: спасти игрока от казни ----
+  socket.on('bodyguardSave', ({ roomId, targetId }, callback) => {
+    const game = games[roomId];
+    if (!game || game.phase !== 'day') return callback?.({ ok: false, error: 'Не день' });
+    const player = game.players.find(p => p.id === socket.data.playerId);
+    if (!player || !player.alive) return callback?.({ ok: false, error: 'Игрок недоступен' });
+    if (player.role !== 'bodyguard') return callback?.({ ok: false, error: 'Вы не телохранитель' });
+    if (game.bodyguardUsed) return callback?.({ ok: false, error: 'Способность уже использована' });
+
+    const target = game.players.find(p => p.id === targetId && p.alive);
+    if (!target) return callback?.({ ok: false, error: 'Цель недоступна' });
+    if (target.id === player.id) return callback?.({ ok: false, error: 'Себя спасать нельзя' });
+
+    game.bodyguardUsed = true;
+    game.bodyguardSaveTarget = target.id;
+
+    broadcastDayState(roomId);
+    callback?.({ ok: true });
+  });
+
   socket.on('setHintsTotal', ({ roomId, total }, callback) => {
     const game = games[roomId];
     if (!game || game.hostSocketId !== socket.id) return callback?.({ ok: false, error: 'Нет доступа' });
@@ -961,6 +1336,7 @@ io.on('connection', (socket) => {
     const game = games[roomId];
     if (!game || game.phase !== 'day') return callback?.({ ok: false, error: 'Не день' });
     if (game.firstDay) return callback?.({ ok: false, error: 'В первый день голосования нет' });
+    if (game.mayorVetoed) return callback?.({ ok: false, error: 'Голосование отменено' });
     const voter = game.players.find(p => p.id === socket.data.playerId);
     if (!voter || !voter.alive) return callback?.({ ok: false, error: 'Вы не можете голосовать' });
 
@@ -986,6 +1362,23 @@ io.on('connection', (socket) => {
     const game = games[roomId];
     if (!game || game.hostSocketId !== socket.id) return callback?.({ ok: false, error: 'Нет доступа' });
     if (game.phase !== 'day') return callback?.({ ok: false, error: 'Не день' });
+
+    // Если мер отменил — день закрывается без казни
+    if (game.mayorVetoed) {
+      game.mayorVetoed = false;
+      game.phase = 'roles';
+      const result = { day: game.day, lynched: null, tie: false, mayorVeto: true };
+      io.to(game.hostSocketId).emit('dayResults', result);
+      game.players.forEach(p => {
+        if (!p.socketId) return;
+        io.to(p.socketId).emit('dayResults', result);
+        io.to(p.socketId).emit('phaseChanged', { phase: 'roles', day: game.day });
+      });
+      io.to(game.hostSocketId).emit('phaseChanged', { phase: 'roles', day: game.day });
+      const rebelResult = tryAwakenRebel(roomId, 'day');
+      checkGameEnd(roomId, rebelResult);
+      return callback?.({ ok: true });
+    }
 
     if (game.firstDay) {
       game.phase = 'roles';
@@ -1033,39 +1426,75 @@ io.on('connection', (socket) => {
         io.to(p.socketId).emit('phaseChanged', { phase: 'roles', day: game.day });
       });
       io.to(game.hostSocketId).emit('phaseChanged', { phase: 'roles', day: game.day });
-      checkGameEnd(roomId);
+      const rebelResult = tryAwakenRebel(roomId, 'day');
+      checkGameEnd(roomId, rebelResult);
       return callback?.({ ok: true });
     }
 
     let lynched = null;
     if (top.length === 1 && max > 0) {
       lynched = game.players.find(p => p.id === top[0]);
-      if (lynched) lynched.alive = false;
     }
 
     game.votes = {};
     game.revoteCandidates = null;
     game.phase = 'roles';
 
+    // Проверка спасения
+    let savedByBodyguard = false;
+    let bodyguardSavedHimself = false;
+
+    if (lynched) {
+      // Телохранитель спасает выбранного
+      if (game.bodyguardUsed && game.bodyguardSaveTarget === lynched.id) {
+        savedByBodyguard = true;
+      }
+      // Телохранитель спасает себя (если 2 жизни)
+      if (lynched.role === 'bodyguard' && lynched.bodyguardLives > 1) {
+        bodyguardSavedHimself = true;
+      }
+
+      if (savedByBodyguard || bodyguardSavedHimself) {
+        // никто не погиб
+        if (bodyguardSavedHimself) {
+          lynched.bodyguardLives--;
+        }
+      } else {
+        lynched.alive = false;
+      }
+    }
+
     const result = {
       day: game.day,
       lynched: lynched ? { id: lynched.id, name: lynched.name, role: lynched.role } : null,
-      tie: false
+      tie: false,
+      savedByBodyguard,
+      bodyguardSavedHimself
     };
 
     io.to(game.hostSocketId).emit('dayResults', result);
+
+    if (savedByBodyguard) {
+      game.players.forEach(p => {
+        if (p.socketId) io.to(p.socketId).emit('bodyguardSaved', { name: lynched.name });
+      });
+    }
+    if (bodyguardSavedHimself) {
+      game.players.forEach(p => {
+        if (p.socketId) io.to(p.socketId).emit('bodyguardSaved', { name: lynched.name, self: true });
+      });
+    }
+
     game.players.forEach(p => {
       if (!p.socketId) return;
-      io.to(p.socketId).emit('dayResults', {
-        day: game.day,
-        lynched: lynched ? { id: lynched.id, name: lynched.name } : null,
-        tie: false
-      });
+      io.to(p.socketId).emit('dayResults', result);
       io.to(p.socketId).emit('phaseChanged', { phase: 'roles', day: game.day });
     });
     io.to(game.hostSocketId).emit('phaseChanged', { phase: 'roles', day: game.day });
 
-    checkGameEnd(roomId);
+    // Проверка пробуждения мятежника (после дневной казни)
+    const rebelResult = tryAwakenRebel(roomId, 'day');
+    checkGameEnd(roomId, rebelResult);
     callback?.({ ok: true });
   });
 
@@ -1096,11 +1525,18 @@ io.on('connection', (socket) => {
   });
 });
 
+// ---------- Подсказки ----------
 function generateHint(game, targetPlayerId) {
   const alive = game.players.filter(p => p.alive && p.id !== targetPlayerId);
   if (alive.length === 0) return null;
 
-  const howMany = Math.min(alive.length, Math.random() < 0.5 ? 2 : 3);
+  const rand = Math.random();
+  let howMany;
+  if (rand < 0.33) howMany = 1;
+  else if (rand < 0.66) howMany = 2;
+  else howMany = 3;
+  howMany = Math.min(alive.length, howMany);
+
   const shuffled = alive.slice();
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -1116,10 +1552,17 @@ function generateHint(game, targetPlayerId) {
   const mafiaBase = 5 + 85 * progress;
   const peacefulBase = 5 + 45 * progress;
 
-  const entries = picked.map(p => {
-    const isMafiaTeam = (p.role === 'mafia' || p.role === 'don');
+  const confuseIdx = (Math.random() < 0.2 && picked.length > 1)
+    ? Math.floor(Math.random() * picked.length)
+    : -1;
+
+  const entries = picked.map((p, idx) => {
+    const isMafiaTeam = (p.role === 'mafia' || p.role === 'don' || (p.role === 'rebel' && p.rebelAwakened));
     let percent;
     if (isMafiaTeam) {
+      percent = Math.round(mafiaBase + (Math.random() * 6 - 3));
+      percent = Math.max(0, Math.min(100, percent));
+    } else if (idx === confuseIdx) {
       percent = Math.round(mafiaBase + (Math.random() * 6 - 3));
       percent = Math.max(0, Math.min(100, percent));
     } else {
@@ -1134,19 +1577,40 @@ function generateHint(game, targetPlayerId) {
   return { current, total, players: entries };
 }
 
-function checkGameEnd(roomId) {
+// ---------- Проверка конца игры ----------
+// rebelResult — результат попытки пробуждения (если был)
+function checkGameEnd(roomId, rebelResult) {
   const game = games[roomId];
   if (!game) return;
-  const aliveMafia = game.players.filter(p => p.alive && (p.role === 'mafia' || p.role === 'don')).length;
-  const aliveOthers = game.players.filter(p => p.alive && p.role !== 'mafia' && p.role !== 'don').length;
-  if (aliveMafia === 0) {
-    game.phase = 'ended';
-    io.to(game.hostSocketId).emit('gameOver', { winner: 'citizens' });
-    game.players.forEach(p => p.socketId && io.to(p.socketId).emit('gameOver', { winner: 'citizens' }));
-  } else if (aliveMafia >= aliveOthers) {
-    game.phase = 'ended';
-    io.to(game.hostSocketId).emit('gameOver', { winner: 'mafia' });
-    game.players.forEach(p => p.socketId && io.to(p.socketId).emit('gameOver', { winner: 'mafia' }));
+
+  const aliveMafia = game.players.filter(p =>
+    p.alive && (p.role === 'mafia' || p.role === 'don' || (p.role === 'rebel' && p.rebelAwakened))
+  ).length;
+
+  const aliveManiac = game.players.filter(p => p.alive && p.role === 'maniac').length;
+
+  const aliveCitizens = game.players.filter(p =>
+    p.alive && p.role !== 'mafia' && p.role !== 'don' && p.role !== 'maniac'
+    && !(p.role === 'rebel' && p.rebelAwakened)
+  ).length;
+
+  // Мятежник не пробудился, потому что не хватило добрых — победа мирных
+  // (считаем: если мафий 0, маньяков 0, мятежник не пробуждён — мирные победили)
+  if (aliveMafia === 0 && aliveManiac === 0) {
+    endGameAndBroadcast(roomId, 'citizens');
+    return;
+  }
+
+  // Маньяк остался один
+  if (aliveManiac > 0 && aliveMafia === 0 && aliveCitizens === 0) {
+    endGameAndBroadcast(roomId, 'maniac');
+    return;
+  }
+
+  // Мафия победила
+  if (aliveMafia > 0 && aliveMafia >= (aliveCitizens + aliveManiac)) {
+    endGameAndBroadcast(roomId, 'mafia');
+    return;
   }
 }
 

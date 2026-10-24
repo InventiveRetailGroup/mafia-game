@@ -76,11 +76,14 @@
   }
   li.player.role-mafia   { border-left-color: #7f1d1d; background: var(--mafia-bg); color: var(--mafia-ink); }
   li.player.role-don     { border-left-color: #7f1d1d; background: var(--mafia-bg); color: var(--mafia-ink); }
+  li.player.role-rebel   { border-left-color: #7f1d1d; background: var(--mafia-bg); color: var(--mafia-ink); }
   li.player.role-sheriff { border-left-color: #1e3a8a; background: var(--special-bg); color: var(--special-ink); }
   li.player.role-doctor  { border-left-color: #1e3a8a; background: var(--special-bg); color: var(--special-ink); }
   li.player.role-maniac  { border-left-color: #1e3a8a; background: var(--special-bg); color: var(--special-ink); }
   li.player.role-beauty  { border-left-color: #1e3a8a; background: var(--special-bg); color: var(--special-ink); }
   li.player.role-journalist { border-left-color: #1e3a8a; background: var(--special-bg); color: var(--special-ink); }
+  li.player.role-mayor   { border-left-color: #1e3a8a; background: var(--special-bg); color: var(--special-ink); }
+  li.player.role-bodyguard { border-left-color: #1e3a8a; background: var(--special-bg); color: var(--special-ink); }
   li.player.role-citizen { border-left-color: #14532d; background: var(--citizen-bg); color: var(--citizen-ink); }
   .dot {
     display: inline-block; width: 8px; height: 8px;
@@ -94,6 +97,10 @@
     color: var(--ink-soft); margin: 16px 0 8px;
   }
   .left-name { display: flex; align-items: center; }
+  .tag-small {
+    font-size: 11px; padding: 2px 6px; border-radius: 6px;
+    background: #fbbf24; color: #78350f; margin-left: 6px; font-weight: 700;
+  }
 
   #hintModal, #hintTotalModal {
     position: fixed; inset: 0;
@@ -256,6 +263,69 @@
     flex-shrink: 0;
   }
   .expanded-card .expanded-close:hover { background: var(--bg-3); }
+
+  #gameEndModal {
+    position: fixed; inset: 0;
+    background: rgba(15, 31, 74, 0.9);
+    display: none; align-items: center; justify-content: center;
+    padding: 20px; z-index: 300; overflow-y: auto;
+    backdrop-filter: blur(2px);
+  }
+  #gameEndModal.open { display: flex; animation: fadeIn 0.25s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes pop {
+    from { transform: scale(0.8); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+  .game-end-card {
+    background: var(--card);
+    border-radius: 18px;
+    width: 100%; max-width: 520px;
+    overflow: hidden;
+    border: 2px solid var(--accent);
+    color: var(--ink);
+    animation: pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    max-height: 92vh; display: flex; flex-direction: column;
+  }
+  .game-end-title {
+    background: var(--bg-2); color: #ffffff;
+    text-align: center; padding: 20px;
+    font-size: 22px; font-weight: 800; letter-spacing: 1px;
+  }
+  .game-end-sub {
+    text-align: center; padding: 12px 20px;
+    font-size: 14px; color: var(--ink-soft);
+    background: var(--card-2); border-bottom: 1px solid var(--line);
+  }
+  .game-end-roles {
+    list-style: none; padding: 12px 20px; margin: 0;
+    overflow-y: auto; flex: 1;
+  }
+  .game-end-roles li {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 14px; margin-bottom: 8px;
+    border-radius: 10px; gap: 8px;
+    background: var(--card-2); color: var(--ink);
+    border-left: 4px solid transparent;
+  }
+  .game-end-roles li.role-mafia, .game-end-roles li.role-don, .game-end-roles li.role-maniac, .game-end-roles li.role-rebel {
+    background: #fecaca; color: #7f1d1d; border-left-color: #7f1d1d;
+  }
+  .game-end-roles li.role-sheriff, .game-end-roles li.role-doctor,
+  .game-end-roles li.role-beauty, .game-end-roles li.role-journalist,
+  .game-end-roles li.role-mayor, .game-end-roles li.role-bodyguard {
+    background: #bfdbfe; color: #1e3a8a; border-left-color: #1e3a8a;
+  }
+  .game-end-roles li.role-citizen {
+    background: #bbf7d0; color: #14532d; border-left-color: #14532d;
+  }
+  .game-end-roles li .role-tag { font-size: 12px; font-weight: 700; letter-spacing: 1px; }
+  .game-end-btn {
+    margin: 0 20px 20px;
+    width: calc(100% - 40px);
+    background: var(--bg-2);
+  }
+  .game-end-btn:hover { background: var(--bg-3); }
 </style>
 </head>
 <body>
@@ -322,6 +392,10 @@
           <div class="section-title">Защищены Красавчиком</div>
           <ul id="immunityList"></ul>
         </div>
+        <div id="mayorBox" style="display:none; margin-top:12px;">
+          <div class="section-title">Способности</div>
+          <ul id="mayorList"></ul>
+        </div>
         <div id="hintLogBox" style="display:none; margin-top:12px;">
           <div class="section-title">Выданные подсказки</div>
           <ul id="hintLogList"></ul>
@@ -331,7 +405,9 @@
       <div id="nightLog" style="display:none; margin-top:20px;">
         <div class="section-title">Ход ночи</div>
         <div id="nightSteps" class="muted" style="margin-bottom:12px;"></div>
-        <div class="section-title">Действия игроков</div>
+        <div class="section-title">Предложения мафии/дона</div>
+        <ul id="nightProposals"></ul>
+        <div class="section-title">Окончательные действия</div>
         <ul id="nightActions"></ul>
       </div>
 
@@ -395,6 +471,15 @@
     </div>
   </div>
 
+  <div id="gameEndModal">
+    <div class="game-end-card">
+      <div class="game-end-title" id="gameEndTitle">—</div>
+      <div class="game-end-sub">Кто кем был в этой игре</div>
+      <ul class="game-end-roles" id="gameEndRoles"></ul>
+      <button class="game-end-btn" id="gameEndBtn">Создать новую игру</button>
+    </div>
+  </div>
+
 <script>
   const socket = io();
   const ROLES = window.ROLE_INFO;
@@ -424,6 +509,7 @@
   const hintsInfo = document.getElementById('hintsInfo');
   const nightLog = document.getElementById('nightLog');
   const nightSteps = document.getElementById('nightSteps');
+  const nightProposals = document.getElementById('nightProposals');
   const nightActions = document.getElementById('nightActions');
   const nightResultsBox = document.getElementById('nightResultsBox');
   const nightResults = document.getElementById('nightResults');
@@ -437,6 +523,8 @@
   const revoteList = document.getElementById('revoteList');
   const hintLogBox = document.getElementById('hintLogBox');
   const hintLogList = document.getElementById('hintLogList');
+  const mayorBox = document.getElementById('mayorBox');
+  const mayorList = document.getElementById('mayorList');
 
   const hintModal = document.getElementById('hintModal');
   const hintPlayers = document.getElementById('hintPlayers');
@@ -457,6 +545,11 @@
   const expandedDesc = document.getElementById('expandedDesc');
   const expandedFeatures = document.getElementById('expandedFeatures');
   const expandedCloseBtn = document.getElementById('expandedCloseBtn');
+
+  const gameEndModal = document.getElementById('gameEndModal');
+  const gameEndTitle = document.getElementById('gameEndTitle');
+  const gameEndRoles = document.getElementById('gameEndRoles');
+  const gameEndBtn = document.getElementById('gameEndBtn');
 
   let roomId = null;
   let hostToken = null;
@@ -614,7 +707,7 @@
 
   function buildGallery() {
     galleryGrid.innerHTML = '';
-    const order = ['citizen', 'mafia', 'don', 'sheriff', 'doctor', 'maniac', 'beauty', 'journalist', 'unknown'];
+    const order = ['citizen', 'mafia', 'don', 'rebel', 'sheriff', 'doctor', 'mayor', 'bodyguard', 'maniac', 'beauty', 'journalist', 'unknown'];
     order.forEach(role => {
       const info = ROLES[role];
       if (!info) return;
@@ -699,8 +792,11 @@
         { value: '', label: 'Авто' },
         { value: 'mafia', label: 'Мафия' },
         { value: 'don', label: 'Дон' },
+        { value: 'rebel', label: 'Мятежник' },
         { value: 'sheriff', label: 'Следователь' },
         { value: 'doctor', label: 'Доктор' },
+        { value: 'mayor', label: 'Мер' },
+        { value: 'bodyguard', label: 'Телохранитель' },
         { value: 'maniac', label: 'Маньяк' },
         { value: 'beauty', label: 'Красавчик' },
         { value: 'journalist', label: 'Журналист' },
@@ -748,16 +844,25 @@
     rolesBtn.style.display = 'none';
     closeGallery();
 
+    renderGamePlayers(state.players);
+  });
+
+  function renderGamePlayers(players) {
     const mafia = [], special = [], citizens = [];
-    state.players.forEach(p => {
-      if (p.role === 'mafia' || p.role === 'don') mafia.push(p);
-      else if (p.role === 'citizen') citizens.push(p);
+    players.forEach(p => {
+      if (p.role === 'mafia' || p.role === 'don' || (p.role === 'rebel' && p.rebelAwakened)) mafia.push(p);
+      else if (p.role === 'citizen' || p.role === 'rebel') citizens.push(p);
       else special.push(p);
     });
-
     renderGroup(mafiaList, mafia);
     renderGroup(specialList, special);
     renderGroup(citizenList, citizens);
+  }
+
+  // Мятежник проснулся
+  socket.on('rebelAwakened', ({ name }) => {
+    // Обновляем группы по gameState (придёт позже) — но здесь просто алерт
+    // На хосте достаточно, чтобы в списке ролей было видно
   });
 
   socket.on('phaseChanged', ({ phase }) => {
@@ -800,8 +905,29 @@
   socket.on('hostNightState', (state) => {
     nightLog.style.display = 'block';
     nightSteps.textContent = `Шаг ${state.stepIndex + 1}/${state.totalSteps}: ${state.stepLabel || '—'}`;
-    nightActions.innerHTML = '';
 
+    nightProposals.innerHTML = '';
+    if (state.proposals && state.proposals.mafia_don) {
+      Object.entries(state.proposals.mafia_don).forEach(([actorId, prop]) => {
+        if (!prop) return;
+        const actor = state.players.find(p => p.id === actorId);
+        const target = state.players.find(p => p.id === prop.targetId);
+        if (!actor) return;
+        const li = document.createElement('li');
+        li.className = 'player';
+        li.style.borderLeftColor = prop.mode === 'invite' ? '#16a34a' : '#7f1d1d';
+        li.textContent = `${prop.mode === 'invite' ? 'Пригласить' : 'Убить'}: ${actor.name} → ${target ? target.name : '?'}`;
+        nightProposals.appendChild(li);
+      });
+    }
+    if (!nightProposals.children.length) {
+      const li = document.createElement('li');
+      li.className = 'muted';
+      li.textContent = 'Пока никто не предложил';
+      nightProposals.appendChild(li);
+    }
+
+    nightActions.innerHTML = '';
     const roleLabelRu = {
       mafia: 'Мафия', don: 'Дон', sheriff: 'Следователь', doctor: 'Доктор',
       maniac: 'Маньяк', beauty: 'Красавчик', journalist: 'Журналист'
@@ -810,18 +936,28 @@
     Object.entries(state.actions).forEach(([role, map]) => {
       if (role === 'mafia_don') {
         Object.entries(map).forEach(([actorId, act]) => {
+          if (act === null) {
+            const actor = state.players.find(p => p.id === actorId);
+            if (!actor) return;
+            const li = document.createElement('li');
+            li.className = 'player';
+            li.textContent = `Пропуск: ${actor.name}`;
+            nightActions.appendChild(li);
+            return;
+          }
           const actor = state.players.find(p => p.id === actorId);
           const target = state.players.find(p => p.id === act.targetId);
           if (!actor) return;
           const li = document.createElement('li');
           li.className = 'player';
-          li.style.borderLeftColor = '#7f1d1d';
+          li.style.borderLeftColor = act.mode === 'invite' ? '#16a34a' : '#7f1d1d';
           li.textContent = `${act.mode === 'invite' ? 'Приглашение' : 'Убийство'}: ${actor.name} → ${target ? target.name : '?'}`;
           nightActions.appendChild(li);
         });
         return;
       }
       Object.entries(map).forEach(([actorId, targetVal]) => {
+        if (targetVal === null) return;
         const actor = state.players.find(p => p.id === actorId);
         if (!actor) return;
         const targets = Array.isArray(targetVal) ? targetVal : [targetVal];
@@ -840,7 +976,7 @@
     if (!nightActions.children.length) {
       const li = document.createElement('li');
       li.className = 'muted';
-      li.textContent = 'Пока никто не выбрал';
+      li.textContent = 'Пока никто не подтвердил';
       nightActions.appendChild(li);
     }
   });
@@ -875,10 +1011,31 @@
     dayVotesList.appendChild(li);
   });
 
+  socket.on('mayorVetoed', ({ name }) => {
+    const li = document.createElement('li');
+    li.className = 'player role-sheriff';
+    li.textContent = `Мер (${name}) отменил голосование`;
+    dayVotesList.appendChild(li);
+  });
+
+  socket.on('bodyguardSaved', ({ name, self }) => {
+    const li = document.createElement('li');
+    li.className = 'player role-sheriff';
+    li.textContent = self ? `Телохранитель спас себя от казни` : `${name} спасён телохранителем`;
+    dayResults.appendChild(li);
+  });
+
   socket.on('hostDayState', (state) => {
     dayLog.style.display = 'block';
     dayVotesList.innerHTML = '';
     alivePlayers = state.players.filter(p => p.alive);
+
+    // Обновляем роли в группах (мятежник мог проснуться)
+    renderGamePlayers(state.players.map(p => ({
+      ...p,
+      role: (p.role === 'rebel' && p.rebelAwakened) ? 'mafia' : p.role,
+      rebelAwakened: p.rebelAwakened
+    })));
 
     const votes = state.votes || {};
     if (state.firstDay) {
@@ -947,6 +1104,27 @@
       immunityBox.style.display = 'none';
     }
 
+    // Способности
+    const abilityLines = [];
+    if (state.mayorUsed) abilityLines.push('Мер использовал способность');
+    if (state.mayorVetoed) abilityLines.push('Голосование отменено мером');
+    if (state.bodyguardUsed) {
+      const target = state.players.find(p => p.id === state.bodyguardSaveTarget);
+      abilityLines.push(`Телохранитель защитил: ${target ? target.name : '?'}`);
+    }
+    if (abilityLines.length) {
+      mayorBox.style.display = 'block';
+      mayorList.innerHTML = '';
+      abilityLines.forEach(line => {
+        const li = document.createElement('li');
+        li.className = 'player role-sheriff';
+        li.textContent = line;
+        mayorList.appendChild(li);
+      });
+    } else {
+      mayorBox.style.display = 'none';
+    }
+
     if (state.hintsTotal) {
       currentHintsTotal = state.hintsTotal;
       currentHintsUsed = state.hintsUsed || 0;
@@ -963,9 +1141,15 @@
     dayResultsBox.style.display = 'block';
     dayResults.innerHTML = '';
     const li = document.createElement('li');
-    if (res.firstDay) {
+    if (res.mayorVeto) {
+      li.className = 'player role-sheriff';
+      li.textContent = 'Голосование отменено мером — никто не казнён';
+    } else if (res.firstDay) {
       li.className = 'player';
       li.textContent = 'Первый день завершён без голосования';
+    } else if (res.savedByBodyguard || res.bodyguardSavedHimself) {
+      li.className = 'player role-sheriff';
+      li.textContent = res.lynched ? `${res.lynched.name} спасён телохранителем` : 'Казнь отменена';
     } else if (res.lynched) {
       li.className = 'player role-mafia';
       li.textContent = `Казнён: ${res.lynched.name}`;
@@ -979,10 +1163,66 @@
     dayResults.appendChild(li);
   });
 
-  socket.on('gameOver', ({ winner }) => {
-    if (winner === 'manual') alert('Игра завершена ведущим');
-    else if (winner === 'mafia') alert('Игра окончена: победила МАФИЯ!');
-    else alert('Игра окончена: победили МИРНЫЕ!');
+  socket.on('gameEnded', ({ winner, roles }) => {
+    if (winner === 'manual') gameEndTitle.textContent = 'Игра завершена ведущим';
+    else if (winner === 'mafia') gameEndTitle.textContent = 'Победила МАФИЯ';
+    else if (winner === 'maniac') gameEndTitle.textContent = 'Победил МАНЬЯК';
+    else gameEndTitle.textContent = 'Победили МИРНЫЕ';
+
+    gameEndRoles.innerHTML = '';
+    const order = { mafia: 0, don: 1, rebel: 2, maniac: 3, sheriff: 4, doctor: 5, mayor: 6, bodyguard: 7, beauty: 8, journalist: 9, citizen: 10 };
+    roles.slice().sort((a, b) => {
+      const ra = a.originalRole === 'rebel' && !a.rebelAwakened ? 11 : (order[a.role] ?? 99);
+      const rb = b.originalRole === 'rebel' && !b.rebelAwakened ? 11 : (order[b.role] ?? 99);
+      return ra - rb;
+    }).forEach(p => {
+      const li = document.createElement('li');
+      let cls = p.role;
+      if (p.originalRole === 'rebel' && !p.rebelAwakened) cls = 'citizen';
+      li.className = 'role-' + cls;
+      const left = document.createElement('span');
+      left.textContent = p.name + (p.alive ? '' : ' (погиб)');
+      const right = document.createElement('span');
+      right.className = 'role-tag';
+      let label = roleLabel(p.role);
+      if (p.originalRole === 'rebel' && p.rebelAwakened) label = 'МЯТЕЖНИК → МАФИЯ';
+      else if (p.originalRole === 'rebel' && !p.rebelAwakened) label = 'МЯТЕЖНИК (не проснулся)';
+      right.textContent = label;
+      li.appendChild(left);
+      li.appendChild(right);
+      gameEndRoles.appendChild(li);
+    });
+
+    gameEndModal.classList.add('open');
+  });
+
+  gameEndBtn.addEventListener('click', () => {
+    gameEndModal.classList.remove('open');
+    localStorage.removeItem('mafia_host');
+    roomId = null;
+    hostToken = null;
+    gameArea.style.display = 'none';
+    setupEl.style.display = 'block';
+    createBtn.disabled = false;
+    statusEl.textContent = '';
+    lobbyList.style.display = 'block';
+    gameList.style.display = 'none';
+    startBtn.disabled = true;
+    startHint.textContent = 'Минимум 4 игрока';
+    nightControls.style.display = 'none';
+    dayLog.style.display = 'none';
+    nightLog.style.display = 'none';
+    nightResultsBox.style.display = 'none';
+    dayResultsBox.style.display = 'none';
+    rolesBtn.style.display = 'none';
+    playerList.innerHTML = '';
+    playerCount.textContent = '0';
+    emptyHint.style.display = 'block';
+    hintsInfo.style.display = 'none';
+    currentHintsTotal = 0;
+    currentHintsUsed = 0;
+    alivePlayers = [];
+    closeGallery();
   });
 
   function renderGroup(ul, players) {
@@ -1000,6 +1240,20 @@
       li.className = 'player role-' + p.role;
       const left = document.createElement('span');
       left.innerHTML = `<span class="dot ${p.connected ? 'on' : ''}"></span>${escapeHtml(p.name)}`;
+      if (p.rebelAwakened) {
+        const tag = document.createElement('span');
+        tag.className = 'tag-small';
+        tag.textContent = 'проснулся';
+        left.appendChild(tag);
+      }
+      if (p.role === 'bodyguard' && p.bodyguardLives === 2) {
+        const tag = document.createElement('span');
+        tag.className = 'tag-small';
+        tag.style.background = '#bfdbfe';
+        tag.style.color = '#1e3a8a';
+        tag.textContent = '2 жизни';
+        left.appendChild(tag);
+      }
       const role = document.createElement('span');
       role.style.fontSize = '13px';
       role.style.fontWeight = '700';
@@ -1014,7 +1268,8 @@
     return ({
       mafia: 'МАФИЯ', don: 'ДОН', citizen: 'МИРНЫЙ',
       sheriff: 'СЛЕДОВАТЕЛЬ', doctor: 'ДОКТОР',
-      maniac: 'МАНЬЯК', beauty: 'КРАСАВЧИК', journalist: 'ЖУРНАЛИСТ'
+      maniac: 'МАНЬЯК', beauty: 'КРАСАВЧИК', journalist: 'ЖУРНАЛИСТ',
+      mayor: 'МЕР', bodyguard: 'ТЕЛОХРАНИТЕЛЬ', rebel: 'МЯТЕЖНИК'
     })[role] || role;
   }
 
