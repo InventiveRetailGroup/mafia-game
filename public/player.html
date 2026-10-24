@@ -121,20 +121,21 @@
   #inviteBtn:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(22,163,74,0.6); }
   #inviteBtn:active { transform: scale(0.95); }
 
+  /* Кнопка способности — в правом верхнем углу (левее «Р» и «✉»), как «Р», не мигает */
   #abilityBtn {
     position: fixed; top: 16px; right: 144px;
     width: 52px; height: 52px; border-radius: 12px;
-    background: #2563eb; border: 2px solid #1d4ed8;
-    color: #fff;
+    background: var(--card); border: 2px solid var(--accent);
+    color: var(--accent);
     padding: 0;
     display: none; align-items: center; justify-content: center;
-    box-shadow: 0 4px 12px rgba(37,99,235,0.45);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.35);
     z-index: 50; cursor: pointer;
-    font-size: 24px; font-weight: 800;
+    font-weight: 800; font-size: 26px;
     transition: transform 0.15s, box-shadow 0.2s, background 0.2s;
-    animation: invitePulse 1.4s ease-in-out infinite;
+    animation: fadeInScale 0.3s ease-out;
   }
-  #abilityBtn:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(37,99,235,0.65); }
+  #abilityBtn:hover { transform: scale(1.06); box-shadow: 0 6px 20px rgba(37,99,235,0.45); }
   #abilityBtn:active { transform: scale(0.95); }
 
   @keyframes invitePulse {
@@ -546,13 +547,43 @@
   }
   .game-end-btn:hover { background: var(--bg-3); }
 
-  #mayorModal .role-card, #bodyguardModal .role-card { max-width: 420px; }
   .modal-buttons {
     display: flex; gap: 8px; padding: 0 20px 20px;
   }
   .modal-buttons button { flex: 1; padding: 14px; }
   .modal-buttons button.cancel { background: #64748b; }
   .modal-buttons button.cancel:hover { background: #788599; }
+
+  /* Телохранитель — модалка пошире и список покрупнее */
+  #bodyguardModal .role-card { max-width: 480px; }
+  #bodyguardTargets {
+    list-style: none;
+    padding: 14px 20px;
+    margin: 0;
+    max-height: 70vh;
+    overflow-y: auto;
+    min-height: 300px;
+  }
+  #bodyguardTargets li {
+    padding: 16px 18px;
+    margin-bottom: 10px;
+    background: var(--card-2);
+    border: 2px solid var(--line);
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--ink);
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  }
+  #bodyguardTargets li:hover {
+    background: #eff6ff;
+    border-color: var(--accent);
+    transform: translateY(-1px);
+  }
+  #bodyguardTargets li:active {
+    transform: scale(0.98);
+  }
 </style>
 </head>
 <body>
@@ -760,8 +791,7 @@
       <div class="role-desc" style="padding: 14px 22px 0;">
         Выбранный игрок выживет, если его казнят сегодня. Способность тратится сразу.
       </div>
-      <ul id="bodyguardTargets" style="list-style: none; padding: 14px 20px; margin: 0; max-height: 50vh; overflow-y: auto;">
-      </ul>
+      <ul id="bodyguardTargets"></ul>
       <div class="modal-buttons">
         <button class="cancel" id="bodyguardCancel">Отмена</button>
       </div>
@@ -1064,7 +1094,6 @@
     inviteModal.classList.add('open');
   });
 
-  // Кнопка способности — для мера и телохранителя
   abilityBtn.addEventListener('click', () => {
     if (myRole === 'mayor') {
       mayorModal.classList.add('open');
@@ -1092,7 +1121,6 @@
       if (!p.alive) return;
       if (p.id === myId) return;
       const li = document.createElement('li');
-      li.className = 'target';
       li.textContent = p.name;
       li.onclick = () => {
         socket.emit('bodyguardSave', { roomId, targetId: p.id }, (res) => {
@@ -1121,21 +1149,18 @@
     location.reload();
   });
 
-  // Пробуждение мятежника
-  socket.on('rebelAwakened', ({ name }) => {
-    alert(`${name} пробудился и стал мафией!`);
+  socket.on('rebelAwakened', () => {
+    alert('Мятежник пробудился и стал мафией!');
   });
 
-  // Мер отменил
-  socket.on('mayorVetoed', ({ name }) => {
+  socket.on('mayorVetoed', () => {
     mayorVetoNote.style.display = 'block';
-    mayorVetoNote.textContent = `Мер (${name}) отменил голосование.`;
+    mayorVetoNote.textContent = 'Мер отменил голосование.';
     abilityBtn.style.display = 'none';
     canMayorVeto = false;
     canBodyguardSave = false;
   });
 
-  // Телохранитель спас
   socket.on('bodyguardSaved', ({ name, self }) => {
     setTimeout(() => {
       if (self) alert(`Телохранитель спас себя от казни!`);
@@ -1145,6 +1170,7 @@
 
   socket.on('privateResult', (data) => {
     if (data.type === 'sheriff') {
+      resultPortrait.style.display = '';
       resultLabel.textContent = 'РЕЗУЛЬТАТ ПРОВЕРКИ';
       resultTitle.textContent = data.targetRoleName || (data.isMafia ? 'МАФИЯ' : 'НЕ МАФИЯ');
       resultTitle.className = 'role-title ' + data.targetRole;
@@ -1160,7 +1186,8 @@
       resultTitle.textContent = data.sameTeam ? 'ОДНА КОМАНДА' : 'РАЗНЫЕ КОМАНДЫ';
       resultTitle.className = 'role-title ' + (data.sameTeam ? 'mafia' : 'citizen');
       resultDesc.textContent = data.message;
-      setPortrait(resultPortrait, null, '');
+      resultPortrait.innerHTML = '';
+      resultPortrait.style.display = 'none';
     }
     resultModal.classList.add('open');
   });
@@ -1511,20 +1538,17 @@
     dayScreen.style.display = 'block';
     dayDay.textContent = data.day;
 
-    // Обновляем роль, если мятежник проснулся
     if (data.yourRole && data.yourRole !== myRole) {
       myRole = data.yourRole;
       setRoleCard(myRole, `/images/${myRole}.jpg`);
     }
 
-    // Мер-вето заметка
     if (data.mayorVetoed) {
       mayorVetoNote.style.display = 'block';
     } else {
       mayorVetoNote.style.display = 'none';
     }
 
-    // Кнопка способности
     canMayorVeto = !!data.canMayorVeto;
     canBodyguardSave = !!data.canBodyguardSave;
     if (canMayorVeto || canBodyguardSave) {
@@ -1646,18 +1670,12 @@
 
   socket.on('dayResults', ({ day, lynched, tie, firstDay, mayorVeto, savedByBodyguard, bodyguardSavedHimself }) => {
     dayActionArea.style.display = 'none';
-    if (mayorVeto) {
-      // уже уведомлено через mayorVetoed
-      return;
-    }
+    if (mayorVeto) return;
     if (firstDay) {
       alert('Первый день завершён. Голосования не было.');
       return;
     }
-    if (savedByBodyguard || bodyguardSavedHimself) {
-      // уже уведомлено через bodyguardSaved
-      return;
-    }
+    if (savedByBodyguard || bodyguardSavedHimself) return;
     if (lynched) alert(`День ${day}. Казнён: ${lynched.name}`);
     else if (tie) alert(`День ${day}. Ничья — никто не казнён`);
     else alert(`День ${day}. Никто не казнён`);

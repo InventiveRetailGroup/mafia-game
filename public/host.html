@@ -859,11 +859,7 @@
     renderGroup(citizenList, citizens);
   }
 
-  // Мятежник проснулся
-  socket.on('rebelAwakened', ({ name }) => {
-    // Обновляем группы по gameState (придёт позже) — но здесь просто алерт
-    // На хосте достаточно, чтобы в списке ролей было видно
-  });
+  socket.on('rebelAwakened', () => {});
 
   socket.on('phaseChanged', ({ phase }) => {
     if (phase === 'roles' || phase === 'night' || phase === 'day') {
@@ -1011,10 +1007,10 @@
     dayVotesList.appendChild(li);
   });
 
-  socket.on('mayorVetoed', ({ name }) => {
+  socket.on('mayorVetoed', () => {
     const li = document.createElement('li');
     li.className = 'player role-sheriff';
-    li.textContent = `Мер (${name}) отменил голосование`;
+    li.textContent = 'Мер отменил голосование';
     dayVotesList.appendChild(li);
   });
 
@@ -1030,7 +1026,6 @@
     dayVotesList.innerHTML = '';
     alivePlayers = state.players.filter(p => p.alive);
 
-    // Обновляем роли в группах (мятежник мог проснуться)
     renderGamePlayers(state.players.map(p => ({
       ...p,
       role: (p.role === 'rebel' && p.rebelAwakened) ? 'mafia' : p.role,
@@ -1104,7 +1099,6 @@
       immunityBox.style.display = 'none';
     }
 
-    // Способности
     const abilityLines = [];
     if (state.mayorUsed) abilityLines.push('Мер использовал способность');
     if (state.mayorVetoed) abilityLines.push('Голосование отменено мером');

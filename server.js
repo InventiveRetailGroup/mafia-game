@@ -88,8 +88,6 @@ function nameOf(game, id) {
   return p ? p.name : '???';
 }
 
-// Особые роли, которых нельзя пригласить в мафию.
-// Мятежника можно!
 const UNRECRUITABLE = ['sheriff', 'doctor', 'maniac', 'beauty', 'journalist', 'mayor', 'bodyguard'];
 
 function maxMafiaWithDon(n) {
@@ -102,7 +100,7 @@ function aliveMafiaOnlyCount(game) {
 }
 
 function aliveMafiaCount(game) {
-  return game.players.filter(p => p.alive && (p.role === 'mafia' || p.role === 'don')).length;
+  return game.players.filter(p => p.alive && (p.role === 'mafia' || p.role === 'don' || (p.role === 'rebel' && p.rebelAwakened))).length;
 }
 
 function currentMafiaLimit(game) {
@@ -111,18 +109,6 @@ function currentMafiaLimit(game) {
 
 function canDonInvite(game) {
   return game.recruitsLeft > 0 && aliveMafiaOnlyCount(game) < currentMafiaLimit(game);
-}
-
-// Мятежник считается мафией, если он "проснулся"
-function isRebelMafia(player) {
-  return player.role === 'rebel' && player.rebelAwakened;
-}
-
-function isMafiaTeamMember(player) {
-  if (!player.alive) return false;
-  if (player.role === 'mafia' || player.role === 'don') return true;
-  if (player.role === 'rebel' && player.rebelAwakened) return true;
-  return false;
 }
 
 // ---- Автобаланс ролей ----
@@ -139,9 +125,6 @@ function assignRoles(players) {
   const hasDon = fixedCounts.don > 0;
   const hasRebel = fixedCounts.rebel > 0;
 
-  // Сколько мафий всего (с доном или без)
-  // Если есть дон — мафий 0 автоматом (дон сам = 1 в команде)
-  // Если есть мятежник — мафий 1 (мало игроков) или 2 (много)
   let autoMafiaCount = 0;
   if (!hasDon) {
     if (hasRebel) {
@@ -152,44 +135,29 @@ function assignRoles(players) {
       else autoMafiaCount = 3;
     }
   }
-  // Учитываем уже назначенных вручную мафий
   const fixedMafia = fixedCounts.mafia || 0;
   const needMafia = Math.max(0, autoMafiaCount - fixedMafia);
 
-  // Особые роли (по 1 каждой) — сколько добавить автоматом
-  // Список ролей, которые могут быть добавлены автоматически
   const autoSpecialPool = ['sheriff', 'doctor', 'bodyguard', 'mayor', 'maniac', 'beauty', 'journalist'];
 
-  // Какие особые роли уже назначены вручную (и не будут добавлены повторно)
   const alreadySpecial = {};
   autoSpecialPool.forEach(r => { if (fixedCounts[r]) alreadySpecial[r] = true; });
 
-  // Сколько свободных слотов для особых ролей
-  // Целевое количество особых ролей в игре = max(2, floor(n/3)) — не слишком много
   let targetSpecialCount = Math.max(2, Math.floor(n / 3));
-  // Ограничим до 4-5, чтобы не перегружать
   targetSpecialCount = Math.min(targetSpecialCount, 5);
 
   const fixedSpecialCount = autoSpecialPool.filter(r => fixedCounts[r]).length;
   let needSpecial = Math.max(0, targetSpecialCount - fixedSpecialCount);
 
-  // Пул особых ролей — перемешанный
   const specialPool = autoSpecialPool.filter(r => !alreadySpecial[r]);
   for (let i = specialPool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [specialPool[i], specialPool[j]] = [specialPool[j], specialPool[i]];
   }
 
-  // Сколько свободных игроков останется для "свободных" ролей
-  // Сначала посчитаем общее количество слотов
-  // Свободные = free.length
-  // Нужно разместить: needMafia + needSpecial + остальные мирные
-  // Но если свободных меньше, чем нужно — сокращаем особые
-
   let assignMafia = Math.min(needMafia, free.length);
   let assignSpecial = Math.min(needSpecial, free.length - assignMafia);
 
-  // Остаток — мирные
   const assignCitizens = free.length - assignMafia - assignSpecial;
 
   const pool = [];
@@ -197,7 +165,6 @@ function assignRoles(players) {
   for (let i = 0; i < assignSpecial; i++) pool.push(specialPool[i]);
   for (let i = 0; i < assignCitizens; i++) pool.push('citizen');
 
-  // Перемешиваем
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
@@ -207,7 +174,6 @@ function assignRoles(players) {
   players.forEach(p => {
     p.alive = true;
     p.rebelAwakened = false;
-    // Телохранитель — 2 жизни
     p.bodyguardLives = p.role === 'bodyguard' ? 2 : 0;
   });
 
@@ -241,7 +207,6 @@ function beginNight(roomId) {
 
   game.pendingDonFeedback = null;
 
-  // Проверяем, есть ли мафия-команда (включая пробуждённого мятежника)
   const hasMafiaTeam = game.players.some(p => p.alive && (
     p.role === 'mafia' || p.role === 'don' || (p.role === 'rebel' && p.rebelAwakened)
   ));
@@ -542,11 +507,9 @@ function handleNightAction(roomId, playerId, payload) {
 
   if (player.role === 'sheriff') {
     let reportedRole = target.role;
-    // Мятежник до пробуждения — как мирный
     if (target.role === 'rebel' && !target.rebelAwakened) {
       reportedRole = 'citizen';
     }
-    // Если мятежник проснулся — как мафия
     if (target.role === 'rebel' && target.rebelAwakened) {
       reportedRole = 'mafia';
     }
@@ -740,7 +703,6 @@ function finishNight(roomId) {
     journal.push(`Доктор был заблокирован красавчиком`);
   }
 
-  // Собираем жертв
   const victims = new Set();
   if (mafiaVictim) victims.add(mafiaVictim);
   if (maniacVictim) victims.add(maniacVictim);
@@ -750,7 +712,6 @@ function finishNight(roomId) {
     const p = game.players.find(pp => pp.id === id);
     if (!p) return;
 
-    // Телохранитель с 2 жизнями
     if (p.role === 'bodyguard' && p.bodyguardLives > 1) {
       p.bodyguardLives--;
       journal.push(`Телохранитель ${p.name} выжил благодаря бронежилету (осталось ${p.bodyguardLives})`);
@@ -859,8 +820,6 @@ function finishNight(roomId) {
   io.to(game.hostSocketId).emit('phaseChanged', { phase: 'day', day: game.day });
   broadcastDayState(roomId);
 
-  // Проверка пробуждения мятежника (после ночи)
-  // Сначала пробуждение — потом конец игры
   const rebelResult = tryAwakenRebel(roomId, 'night');
 
   checkGameEnd(roomId, rebelResult);
@@ -921,7 +880,6 @@ function broadcastDayState(roomId) {
 }
 
 // ---------- Пробуждение мятежника ----------
-// phase: 'night' | 'day' — от чего зависит минимальное количество добрых
 function tryAwakenRebel(roomId, phase) {
   const game = games[roomId];
   if (!game) return { awakened: false };
@@ -929,22 +887,18 @@ function tryAwakenRebel(roomId, phase) {
   const rebel = game.players.find(p => p.role === 'rebel' && p.alive && !p.rebelAwakened);
   if (!rebel) return { awakened: false };
 
-  // Есть ли ещё живые мафии/дон?
   const aliveMafiaTeam = game.players.filter(p => p.alive && (p.role === 'mafia' || p.role === 'don')).length;
   if (aliveMafiaTeam > 0) return { awakened: false };
 
-  // Сколько добрых игроков (все, кроме мафии/дона/мятежника)
   const aliveGood = game.players.filter(p =>
     p.alive && p.role !== 'mafia' && p.role !== 'don' && p.role !== 'rebel'
   ).length;
 
-  // Если последняя мафия убита ночью — нужно >= 2 добрых
-  // Если казнена днём — нужно >= 3 добрых
   const minGood = phase === 'night' ? 2 : 3;
 
   if (aliveGood >= minGood) {
     rebel.rebelAwakened = true;
-    io.to(game.hostSocketId).emit('rebelAwakened', { name: rebel.name });
+    io.to(game.hostSocketId).emit('rebelAwakened', {});
     game.players.forEach(p => {
       if (!p.socketId) return;
       if (p.id === rebel.id) {
@@ -955,7 +909,7 @@ function tryAwakenRebel(roomId, phase) {
           rebelAwakened: true
         });
       } else {
-        io.to(p.socketId).emit('rebelAwakened', { name: rebel.name });
+        io.to(p.socketId).emit('rebelAwakened', {});
       }
     });
     return { awakened: true };
@@ -1222,7 +1176,6 @@ io.on('connection', (socket) => {
     if (!inv) return callback?.({ ok: false, error: 'Нет приглашения' });
 
     if (accept) {
-      // Если мятежник — становится мафией + rebelAwakened
       if (player.role === 'rebel') {
         player.role = 'mafia';
         player.rebelAwakened = true;
@@ -1262,12 +1215,9 @@ io.on('connection', (socket) => {
     game.votes = {};
     game.revoteCandidates = null;
 
-    // Телохранитель НЕ тратит способность, но его выбор сбрасывается
-    // (по требованию — если мер отменил, телохранитель не тратит)
-
-    io.to(game.hostSocketId).emit('mayorVetoed', { name: player.name });
+    io.to(game.hostSocketId).emit('mayorVetoed', {});
     game.players.forEach(p => {
-      if (p.socketId) io.to(p.socketId).emit('mayorVetoed', { name: player.name });
+      if (p.socketId) io.to(p.socketId).emit('mayorVetoed', {});
     });
     broadcastDayState(roomId);
     callback?.({ ok: true });
@@ -1363,7 +1313,6 @@ io.on('connection', (socket) => {
     if (!game || game.hostSocketId !== socket.id) return callback?.({ ok: false, error: 'Нет доступа' });
     if (game.phase !== 'day') return callback?.({ ok: false, error: 'Не день' });
 
-    // Если мер отменил — день закрывается без казни
     if (game.mayorVetoed) {
       game.mayorVetoed = false;
       game.phase = 'roles';
@@ -1440,24 +1389,26 @@ io.on('connection', (socket) => {
     game.revoteCandidates = null;
     game.phase = 'roles';
 
-    // Проверка спасения
     let savedByBodyguard = false;
     let bodyguardSavedHimself = false;
 
     if (lynched) {
-      // Телохранитель спасает выбранного
+      const bodyguardPlayer = game.players.find(p => p.role === 'bodyguard' && p.alive);
+
       if (game.bodyguardUsed && game.bodyguardSaveTarget === lynched.id) {
         savedByBodyguard = true;
       }
-      // Телохранитель спасает себя (если 2 жизни)
       if (lynched.role === 'bodyguard' && lynched.bodyguardLives > 1) {
         bodyguardSavedHimself = true;
       }
 
       if (savedByBodyguard || bodyguardSavedHimself) {
-        // никто не погиб
         if (bodyguardSavedHimself) {
           lynched.bodyguardLives--;
+        }
+        // Телохранитель тратит жизнь за спасение другого игрока
+        if (savedByBodyguard && !bodyguardSavedHimself && bodyguardPlayer && bodyguardPlayer.bodyguardLives > 0) {
+          bodyguardPlayer.bodyguardLives--;
         }
       } else {
         lynched.alive = false;
@@ -1492,7 +1443,6 @@ io.on('connection', (socket) => {
     });
     io.to(game.hostSocketId).emit('phaseChanged', { phase: 'roles', day: game.day });
 
-    // Проверка пробуждения мятежника (после дневной казни)
     const rebelResult = tryAwakenRebel(roomId, 'day');
     checkGameEnd(roomId, rebelResult);
     callback?.({ ok: true });
@@ -1578,7 +1528,6 @@ function generateHint(game, targetPlayerId) {
 }
 
 // ---------- Проверка конца игры ----------
-// rebelResult — результат попытки пробуждения (если был)
 function checkGameEnd(roomId, rebelResult) {
   const game = games[roomId];
   if (!game) return;
@@ -1594,20 +1543,16 @@ function checkGameEnd(roomId, rebelResult) {
     && !(p.role === 'rebel' && p.rebelAwakened)
   ).length;
 
-  // Мятежник не пробудился, потому что не хватило добрых — победа мирных
-  // (считаем: если мафий 0, маньяков 0, мятежник не пробуждён — мирные победили)
   if (aliveMafia === 0 && aliveManiac === 0) {
     endGameAndBroadcast(roomId, 'citizens');
     return;
   }
 
-  // Маньяк остался один
   if (aliveManiac > 0 && aliveMafia === 0 && aliveCitizens === 0) {
     endGameAndBroadcast(roomId, 'maniac');
     return;
   }
 
-  // Мафия победила
   if (aliveMafia > 0 && aliveMafia >= (aliveCitizens + aliveManiac)) {
     endGameAndBroadcast(roomId, 'mafia');
     return;
