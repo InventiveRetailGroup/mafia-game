@@ -839,7 +839,7 @@ function broadcastDayState(roomId) {
     const isMayor = p.role === 'mayor' && p.alive;
     const isBodyguard = p.role === 'bodyguard' && p.alive;
     const canMayorVeto = isMayor && !game.mayorUsed && !game.firstDay && !game.mayorVetoed;
-    const canBodyguardSave = isBodyguard && !game.bodyguardUsed;
+    const canBodyguardSave = isBodyguard && !game.bodyguardUsed && p.bodyguardLives > 1;
 
     io.to(p.socketId).emit('dayState', {
       day: game.day,
@@ -1231,6 +1231,7 @@ io.on('connection', (socket) => {
     if (!player || !player.alive) return callback?.({ ok: false, error: 'Игрок недоступен' });
     if (player.role !== 'bodyguard') return callback?.({ ok: false, error: 'Вы не телохранитель' });
     if (game.bodyguardUsed) return callback?.({ ok: false, error: 'Способность уже использована' });
+    if (player.bodyguardLives <= 1) return callback?.({ ok: false, error: 'У вас больше нет дополнительной жизни' });
 
     const target = game.players.find(p => p.id === targetId && p.alive);
     if (!target) return callback?.({ ok: false, error: 'Цель недоступна' });
@@ -1406,7 +1407,6 @@ io.on('connection', (socket) => {
         if (bodyguardSavedHimself) {
           lynched.bodyguardLives--;
         }
-        // Телохранитель тратит жизнь за спасение другого игрока
         if (savedByBodyguard && !bodyguardSavedHimself && bodyguardPlayer && bodyguardPlayer.bodyguardLives > 0) {
           bodyguardPlayer.bodyguardLives--;
         }

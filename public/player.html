@@ -114,16 +114,16 @@
     display: none; align-items: center; justify-content: center;
     box-shadow: 0 4px 12px rgba(22,163,74,0.45);
     z-index: 50; cursor: pointer;
-    font-size: 24px; font-weight: 700;
+    font-size: 26px; font-weight: 800;
     transition: transform 0.15s, box-shadow 0.2s, background 0.2s;
     animation: invitePulse 1.4s ease-in-out infinite;
   }
   #inviteBtn:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(22,163,74,0.6); }
   #inviteBtn:active { transform: scale(0.95); }
 
-  /* Кнопка способности — в правом верхнем углу (левее «Р» и «✉»), как «Р», не мигает */
+  /* Кнопка способности — в левом верхнем углу, как «Р», не мигает */
   #abilityBtn {
-    position: fixed; top: 16px; right: 144px;
+    position: fixed; top: 16px; left: 16px;
     width: 52px; height: 52px; border-radius: 12px;
     background: var(--card); border: 2px solid var(--accent);
     color: var(--accent);
@@ -589,7 +589,7 @@
 <body>
 
   <button id="roleBtn" aria-label="Показать роль">Р</button>
-  <button id="inviteBtn" aria-label="Приглашение">✉</button>
+  <button id="inviteBtn" aria-label="Приглашение">П</button>
   <button id="abilityBtn" aria-label="Способность">С</button>
 
   <div id="content">
